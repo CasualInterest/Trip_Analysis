@@ -81,59 +81,61 @@ with col2:
 # File uploader with form to avoid key conflicts
 with col1:
     if len(st.session_state.uploaded_files) < 12:
-        uploaded_file = st.file_uploader(
-            "Upload a trip schedule file (.txt)",
+        uploaded_files = st.file_uploader(
+            "Upload trip schedule files (.txt)",
             type=['txt'],
+            accept_multiple_files=True,
             key=f'file_uploader_{st.session_state.file_counter}'
         )
         
-        if uploaded_file is not None:
-            # Read content immediately
-            content = uploaded_file.read().decode('utf-8')
-            file_hash = get_file_hash(content)
-            
-            # Check if this exact file (by content) is already uploaded
-            already_exists = False
-            for existing_name, existing_data in st.session_state.uploaded_files.items():
-                if get_file_hash(existing_data['content']) == file_hash:
-                    already_exists = True
-                    st.warning(f"⚠️ This file content is already uploaded as '{existing_name}'")
-                    break
-            
-            if not already_exists:
-                # Show date selection form
-                with st.form(key=f'date_form_{file_hash}'):
-                    st.subheader(f"📅 Set Date for: {uploaded_file.name}")
-                    
-                    col_m, col_y = st.columns(2)
-                    with col_m:
-                        month = st.selectbox(
-                            "Month",
-                            ["January", "February", "March", "April", "May", "June",
-                             "July", "August", "September", "October", "November", "December"],
-                            index=0
-                        )
-                    with col_y:
-                        year = st.number_input(
-                            "Year",
-                            min_value=2020,
-                            max_value=2030,
-                            value=2026
-                        )
-                    
-                    submitted = st.form_submit_button("✅ Add File")
-                    
-                    if submitted:
-                        # Add to uploaded files
-                        st.session_state.uploaded_files[uploaded_file.name] = {
-                            'content': content,
-                            'month': month,
-                            'year': year,
-                            'display_name': f"{month} {year} - {uploaded_file.name}"
-                        }
-                        st.session_state.file_counter += 1
-                        st.success(f"✅ Added {uploaded_file.name}")
-                        st.rerun()
+        if uploaded_files:
+            for uploaded_file in uploaded_files:
+                # Read content immediately
+                content = uploaded_file.read().decode('utf-8')
+                file_hash = get_file_hash(content)
+                
+                # Check if this exact file (by content) is already uploaded
+                already_exists = False
+                for existing_name, existing_data in st.session_state.uploaded_files.items():
+                    if get_file_hash(existing_data['content']) == file_hash:
+                        already_exists = True
+                        st.warning(f"⚠️ File '{uploaded_file.name}' already uploaded as '{existing_name}'")
+                        break
+                
+                if not already_exists and uploaded_file.name not in st.session_state.uploaded_files:
+                    # Show date selection form
+                    with st.form(key=f'date_form_{file_hash}'):
+                        st.subheader(f"📅 Set Date for: {uploaded_file.name}")
+                        
+                        col_m, col_y = st.columns(2)
+                        with col_m:
+                            month = st.selectbox(
+                                "Month",
+                                ["January", "February", "March", "April", "May", "June",
+                                 "July", "August", "September", "October", "November", "December"],
+                                index=0
+                            )
+                        with col_y:
+                            year = st.number_input(
+                                "Year",
+                                min_value=2020,
+                                max_value=2030,
+                                value=2026
+                            )
+                        
+                        submitted = st.form_submit_button("✅ Add File")
+                        
+                        if submitted:
+                            # Add to uploaded files
+                            st.session_state.uploaded_files[uploaded_file.name] = {
+                                'content': content,
+                                'month': month,
+                                'year': year,
+                                'display_name': f"{month} {year} - {uploaded_file.name}"
+                            }
+                            st.session_state.file_counter += 1
+                            st.success(f"✅ Added {uploaded_file.name}")
+                            st.rerun()
     else:
         st.info("Maximum of 12 files reached. Remove files to add more.")
 
