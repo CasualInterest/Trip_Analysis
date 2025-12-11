@@ -569,12 +569,35 @@ def analyze_trips(trips_data, front_commute_time='1000', back_commute_time='2000
     
     metrics['trip_day_length'] = trip_length_counts
     
-    # Trips with one leg on last day (check base last day, not red-eye adjusted)
+    # Trips with one leg on last day - must be exactly ONE flight returning to base on the last day
     one_leg_last_day_counts = {}
     for _, trip in df.iterrows():
-        if trip['days'] and len(trip['days']) > 0:
-            last_day = trip['days'][-1]
-            if len(last_day.get('flights', [])) == 1:
+        if trip['days'] and len(trip['days']) > 0 and trip.get('flights'):
+            # Get base airports
+            base = trip.get('base')
+            base_airports = {
+                'ATL': ['ATL'],
+                'BOS': ['BOS'],
+                'NYC': ['JFK', 'LGA', 'EWR'],
+                'DTW': ['DTW'],
+                'SLC': ['SLC'],
+                'MSP': ['MSP'],
+                'SEA': ['SEA'],
+                'LAX': ['LAX', 'LGB', 'ONT']
+            }
+            airports = base_airports.get(base, [])
+            
+            # Get the base last day letter (before red-eye adjustment)
+            last_day_letter = trip['days'][-1]['day']
+            
+            # Count flights on the last day that arrive at base
+            flights_to_base_on_last_day = 0
+            for flight in trip['flights']:
+                if flight['day'] == last_day_letter and flight['arrival_airport'] in airports:
+                    flights_to_base_on_last_day += 1
+            
+            # Only count if exactly 1 flight returns to base on last day
+            if flights_to_base_on_last_day == 1:
                 length = trip['trip_length']
                 occurrences = trip['occurrences']
                 one_leg_last_day_counts[length] = one_leg_last_day_counts.get(length, 0) + occurrences
@@ -936,8 +959,8 @@ def generate_pdf_report(metrics_list, file_names, base_filter="All"):
         data = [
             ['Metric', 'Value'],
             ['Total Trips', str(metrics.get('total_trips', 0))],
-            ['Avg Credit per Trip', f"{metrics.get('avg_credit_per_trip', 0):.2f} hours"],
-            ['Avg Credit per Day', f"{metrics.get('avg_credit_per_day', 0):.2f} hours"],
+            ['Avg Credit per Trip', f"{metrics.get('avg_credit_per_trip_overall', 0):.2f} hours"],
+            ['Avg Credit per Day', f"{metrics.get('avg_credit_per_day_overall', 0):.2f} hours"],
             ['Avg TAFB', f"{metrics.get('avg_tafb', 0):.2f} hours"],
         ]
         
