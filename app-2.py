@@ -184,6 +184,8 @@ def parse_bidding_file(file_content, filename, month_name, year):
             dh_match = re.search(r'^\s+([A-E])\s+DH\s+(\d+)\s+([A-Z]{3})\s+(\d{4})\*?\s+([A-Z]{3})\s+(\d{4})\*?', line)
             # Continuation flight (no day letter): FLIGHT# DEPART_AIRPORT TIME ARRIVE_AIRPORT TIME
             cont_match = re.search(r'^\s+(\d+)\s+([A-Z]{3})\s+(\d{4})\*?\s+([A-Z]{3})\s+(\d{4})\*?', line) if current_day_letter else None
+            # Continuation flight without flight number: DEPART_AIRPORT TIME ARRIVE_AIRPORT TIME
+            cont_no_num_match = re.search(r'^\s+([A-Z]{3})\s+(\d{4})\*?\s+([A-Z]{3})\s+(\d{4})\*?', line) if current_day_letter else None
             # Continuation DH flight
             cont_dh_match = re.search(r'^\s+DH\s+(\d+)\s+([A-Z]{3})\s+(\d{4})\*?\s+([A-Z]{3})\s+(\d{4})\*?', line) if current_day_letter else None
             
@@ -287,6 +289,31 @@ def parse_bidding_file(file_content, filename, month_name, year):
                 for day in current_days:
                     if day['day'] == current_day_letter:
                         day['flights'].append(flight_num)
+                        break
+            
+            elif cont_no_num_match:
+                # Continuation flight without flight number - uses current_day_letter
+                dep_airport = cont_no_num_match.group(1)
+                dep_time = cont_no_num_match.group(2)
+                arr_airport = cont_no_num_match.group(3)
+                arr_time = cont_no_num_match.group(4)
+                
+                flight_info = {
+                    'day': current_day_letter,
+                    'flight_number': 'CONT',  # No flight number available
+                    'departure_airport': dep_airport,
+                    'departure_time': dep_time,
+                    'arrival_airport': arr_airport,
+                    'arrival_time': arr_time,
+                    'is_deadhead': False
+                }
+                
+                current_trip['flights'].append(flight_info)
+                
+                # Add to current day (using placeholder flight number)
+                for day in current_days:
+                    if day['day'] == current_day_letter:
+                        day['flights'].append('CONT')
                         break
             
             elif cont_dh_match:
@@ -625,35 +652,21 @@ def analyze_trips(trips_data, front_commute_time='1000', back_commute_time='2000
     
     metrics['trip_day_length'] = trip_length_counts
     
-    # Trips with one leg on last day - must be exactly ONE flight returning to base on the last day
+    # Trips with one leg on last day - count if the last day letter has exactly ONE flight leg total
     one_leg_last_day_counts = {}
     for _, trip in df.iterrows():
         if trip['days'] and len(trip['days']) > 0 and trip.get('flights'):
-            # Get base airports
-            base = trip.get('base')
-            base_airports = {
-                'ATL': ['ATL'],
-                'BOS': ['BOS'],
-                'NYC': ['JFK', 'LGA', 'EWR'],
-                'DTW': ['DTW'],
-                'SLC': ['SLC'],
-                'MSP': ['MSP'],
-                'SEA': ['SEA'],
-                'LAX': ['LAX', 'LGB', 'ONT']
-            }
-            airports = base_airports.get(base, [])
-            
             # Get the base last day letter (before red-eye adjustment)
             last_day_letter = trip['days'][-1]['day']
             
-            # Count flights on the last day that arrive at base
-            flights_to_base_on_last_day = 0
+            # Count total flights on the last day (any flights, not just to base)
+            flights_on_last_day = 0
             for flight in trip['flights']:
-                if flight['day'] == last_day_letter and flight['arrival_airport'] in airports:
-                    flights_to_base_on_last_day += 1
+                if flight['day'] == last_day_letter:
+                    flights_on_last_day += 1
             
-            # Only count if exactly 1 flight returns to base on last day
-            if flights_to_base_on_last_day == 1:
+            # Only count if exactly 1 flight leg on last day
+            if flights_on_last_day == 1:
                 length = trip['trip_length']
                 occurrences = trip['occurrences']
                 one_leg_last_day_counts[length] = one_leg_last_day_counts.get(length, 0) + occurrences
