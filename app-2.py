@@ -546,6 +546,10 @@ def analyze_trips(trips_data, front_commute_time='1000', back_commute_time='2000
     
     df = pd.DataFrame(trips_data)
     
+    # Ensure occurrences field exists (for backwards compatibility)
+    if 'occurrences' not in df.columns:
+        df['occurrences'] = 1
+    
     # Calculate trip lengths with red-eye rule
     df['trip_length'] = df.apply(calculate_trip_length, axis=1)
     df['base_last_day'] = df.apply(get_base_last_day, axis=1)
@@ -1170,14 +1174,19 @@ def main():
             df = all_dfs[0]
             
             st.header(f"📈 Analysis: {fname}")
-            st.markdown(f"**Base:** {selected_base} | **Total Trips:** {metrics['total_trips']}")
+            
+            # Get file metadata
+            file_meta = st.session_state.file_metadata.get(fname, {})
+            month_year = f"{file_meta.get('month', 'Unknown')} {file_meta.get('year', '')}" if file_meta else "Unknown"
+            
+            st.markdown(f"**Base:** {selected_base} | **Period:** {month_year} | **Total Trips:** {metrics['total_trips']}")
             
             # Key metrics
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                st.metric("Avg Credit/Trip", f"{metrics['avg_credit_per_trip']:.2f} hrs")
+                st.metric("Avg Credit/Trip", f"{metrics.get('avg_credit_per_trip_overall', 0):.2f} hrs")
             with col2:
-                st.metric("Avg Credit/Day", f"{metrics['avg_credit_per_day']:.2f} hrs")
+                st.metric("Avg Credit/Day", f"{metrics.get('avg_credit_per_day_overall', 0):.2f} hrs")
             with col3:
                 st.metric("Avg TAFB", f"{metrics['avg_tafb']:.2f} hrs")
             with col4:
@@ -1276,6 +1285,45 @@ def main():
             with col4:
                 red_eye_pct = (total_red_eye / total_trips * 100) if total_trips > 0 else 0
                 st.metric("Red-Eye Trips", f"{total_red_eye}", f"{red_eye_pct:.1f}%")
+            
+            # Detailed metrics by trip length
+            st.markdown("---")
+            st.subheader("📋 Detailed Metrics by Trip Length")
+            
+            # Build detailed table
+            detailed_data = []
+            for length in sorted(metrics.get('trip_day_length', {}).keys()):
+                trip_count = metrics['trip_day_length'].get(length, 0)
+                
+                # Credit metrics
+                avg_credit_trip = metrics.get('avg_credit_per_trip', {}).get(length, 0)
+                avg_credit_day = metrics.get('avg_credit_per_day', {}).get(length, 0)
+                
+                # Red-eye
+                red_eye_data = metrics.get('red_eye_by_length', {}).get(length, {'with_red_eye': 0, 'total': 0})
+                red_eye_pct = (red_eye_data['with_red_eye'] / red_eye_data['total'] * 100) if red_eye_data['total'] > 0 else 0
+                
+                # Commutability
+                commute_data = metrics.get('commute_by_length', {}).get(length, {'front': 0, 'back': 0, 'both': 0, 'total': 0})
+                front_pct = (commute_data['front'] / commute_data['total'] * 100) if commute_data['total'] > 0 else 0
+                back_pct = (commute_data['back'] / commute_data['total'] * 100) if commute_data['total'] > 0 else 0
+                both_pct = (commute_data['both'] / commute_data['total'] * 100) if commute_data['total'] > 0 else 0
+                
+                detailed_data.append({
+                    'Trip Length': f"{length}-Day",
+                    'Count': trip_count,
+                    '% of Total': f"{(trip_count/total_trips*100):.1f}%",
+                    'Avg Credit/Trip': f"{avg_credit_trip:.2f}h",
+                    'Avg Credit/Day': f"{avg_credit_day:.2f}h",
+                    'Red-Eye %': f"{red_eye_pct:.1f}%",
+                    'Front Commute %': f"{front_pct:.1f}%",
+                    'Back Commute %': f"{back_pct:.1f}%",
+                    'Both Commute %': f"{both_pct:.1f}%"
+                })
+            
+            if detailed_data:
+                df_detailed = pd.DataFrame(detailed_data)
+                st.dataframe(df_detailed, use_container_width=True, hide_index=True)
         
         else:
             # Multiple file comparison
