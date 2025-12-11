@@ -182,6 +182,10 @@ def parse_bidding_file(file_content, filename, month_name, year):
             flight_match = re.search(r'^\s+([A-E])\s+(\d+)\s+([A-Z]{3})\s+(\d{4})\*?\s+([A-Z]{3})\s+(\d{4})\*?', line)
             # Deadhead flight: A DH FLIGHT# DEPART_AIRPORT TIME ARRIVE_AIRPORT TIME
             dh_match = re.search(r'^\s+([A-E])\s+DH\s+(\d+)\s+([A-Z]{3})\s+(\d{4})\*?\s+([A-Z]{3})\s+(\d{4})\*?', line)
+            # Continuation flight (no day letter): FLIGHT# DEPART_AIRPORT TIME ARRIVE_AIRPORT TIME
+            cont_match = re.search(r'^\s+(\d+)\s+([A-Z]{3})\s+(\d{4})\*?\s+([A-Z]{3})\s+(\d{4})\*?', line) if current_day_letter else None
+            # Continuation DH flight
+            cont_dh_match = re.search(r'^\s+DH\s+(\d+)\s+([A-Z]{3})\s+(\d{4})\*?\s+([A-Z]{3})\s+(\d{4})\*?', line) if current_day_letter else None
             
             if flight_match:
                 day_letter = flight_match.group(1)
@@ -256,6 +260,58 @@ def parse_bidding_file(file_content, filename, month_name, year):
                 # Add flight to current day
                 for day in current_days:
                     if day['day'] == day_letter:
+                        day['flights'].append(flight_num)
+                        break
+            
+            elif cont_match:
+                # Continuation flight - uses current_day_letter
+                flight_num = cont_match.group(1)
+                dep_airport = cont_match.group(2)
+                dep_time = cont_match.group(3)
+                arr_airport = cont_match.group(4)
+                arr_time = cont_match.group(5)
+                
+                flight_info = {
+                    'day': current_day_letter,
+                    'flight_number': flight_num,
+                    'departure_airport': dep_airport,
+                    'departure_time': dep_time,
+                    'arrival_airport': arr_airport,
+                    'arrival_time': arr_time,
+                    'is_deadhead': False
+                }
+                
+                current_trip['flights'].append(flight_info)
+                
+                # Add flight to current day
+                for day in current_days:
+                    if day['day'] == current_day_letter:
+                        day['flights'].append(flight_num)
+                        break
+            
+            elif cont_dh_match:
+                # Continuation deadhead - uses current_day_letter
+                flight_num = cont_dh_match.group(1)
+                dep_airport = cont_dh_match.group(2)
+                dep_time = cont_dh_match.group(3)
+                arr_airport = cont_dh_match.group(4)
+                arr_time = cont_dh_match.group(5)
+                
+                flight_info = {
+                    'day': current_day_letter,
+                    'flight_number': flight_num,
+                    'departure_airport': dep_airport,
+                    'departure_time': dep_time,
+                    'arrival_airport': arr_airport,
+                    'arrival_time': arr_time,
+                    'is_deadhead': True
+                }
+                
+                current_trip['flights'].append(flight_info)
+                
+                # Add flight to current day
+                for day in current_days:
+                    if day['day'] == current_day_letter:
                         day['flights'].append(flight_num)
                         break
         
