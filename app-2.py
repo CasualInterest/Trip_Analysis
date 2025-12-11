@@ -88,6 +88,7 @@ def parse_bidding_file(file_content, filename):
     current_trip = None
     current_days = []
     first_departure_found = False
+    current_day_letter = None
     
     for i, line in enumerate(lines):
         # Detect trip number
@@ -102,42 +103,98 @@ def parse_bidding_file(file_content, filename):
             current_trip = {
                 'trip_number': trip_match.group(1),
                 'trip_type': trip_match.group(2),
-                'base': None,  # Will be determined from first departure
+                'base': None,
                 'filename': filename,
-                'first_departure': None
+                'first_departure': None,
+                'flights': []  # Store all flight details
             }
             current_days = []
             first_departure_found = False
+            current_day_letter = None
             continue
         
-        # Detect first flight leg (Day A) to determine base - handles both regular and DH flights
-        if not first_departure_found and current_trip:
-            # Regular flight: A FLIGHT# AIRPORT TIME
-            flight_match = re.search(r'^\s+A\s+\d+\s+([A-Z]{3})\s+\d{4}', line)
-            # Deadhead flight: A DH FLIGHT# AIRPORT TIME
-            dh_match = re.search(r'^\s+A\s+DH\s+\d+\s+([A-Z]{3})\s+\d{4}', line)
+        # Detect day lines and flight information
+        if current_trip:
+            # Regular flight: A FLIGHT# DEPART_AIRPORT TIME ARRIVE_AIRPORT TIME
+            flight_match = re.search(r'^\s+([A-D])\s+(\d+)\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})', line)
+            # Deadhead flight: A DH FLIGHT# DEPART_AIRPORT TIME ARRIVE_AIRPORT TIME
+            dh_match = re.search(r'^\s+([A-D])\s+DH\s+(\d+)\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})', line)
             
             if flight_match:
-                airport = flight_match.group(1)
-                current_trip['first_departure'] = airport
-                current_trip['base'] = airport_to_base.get(airport, 'UNKNOWN')
-                first_departure_found = True
+                day_letter = flight_match.group(1)
+                flight_num = flight_match.group(2)
+                dep_airport = flight_match.group(3)
+                dep_time = flight_match.group(4)
+                arr_airport = flight_match.group(5)
+                arr_time = flight_match.group(6)
+                
+                flight_info = {
+                    'day': day_letter,
+                    'flight_number': flight_num,
+                    'departure_airport': dep_airport,
+                    'departure_time': dep_time,
+                    'arrival_airport': arr_airport,
+                    'arrival_time': arr_time,
+                    'is_deadhead': False
+                }
+                
+                current_trip['flights'].append(flight_info)
+                
+                # Determine base from first flight
+                if not first_departure_found:
+                    current_trip['first_departure'] = dep_airport
+                    current_trip['base'] = airport_to_base.get(dep_airport, 'UNKNOWN')
+                    first_departure_found = True
+                
+                # Track days
+                if day_letter != current_day_letter:
+                    current_day_letter = day_letter
+                    if day_letter not in [d['day'] for d in current_days]:
+                        current_days.append({'day': day_letter, 'flights': []})
+                
+                # Add flight to current day
+                for day in current_days:
+                    if day['day'] == day_letter:
+                        day['flights'].append(flight_num)
+                        break
+            
             elif dh_match:
-                airport = dh_match.group(1)
-                current_trip['first_departure'] = airport
-                current_trip['base'] = airport_to_base.get(airport, 'UNKNOWN')
-                first_departure_found = True
-        
-        # Detect day lines (A, B, C, D, etc.) and count flights
-        day_match = re.search(r'^\s+([A-D])\s+(\d+)', line)
-        if day_match and current_trip:
-            day_letter = day_match.group(1)
-            # Check if this day already exists
-            existing_day = next((d for d in current_days if d['day'] == day_letter), None)
-            if existing_day:
-                existing_day['flights'].append(day_match.group(2))
-            else:
-                current_days.append({'day': day_letter, 'flights': [day_match.group(2)]})
+                day_letter = dh_match.group(1)
+                flight_num = dh_match.group(2)
+                dep_airport = dh_match.group(3)
+                dep_time = dh_match.group(4)
+                arr_airport = dh_match.group(5)
+                arr_time = dh_match.group(6)
+                
+                flight_info = {
+                    'day': day_letter,
+                    'flight_number': flight_num,
+                    'departure_airport': dep_airport,
+                    'departure_time': dep_time,
+                    'arrival_airport': arr_airport,
+                    'arrival_time': arr_time,
+                    'is_deadhead': True
+                }
+                
+                current_trip['flights'].append(flight_info)
+                
+                # Determine base from first flight (even if DH)
+                if not first_departure_found:
+                    current_trip['first_departure'] = dep_airport
+                    current_trip['base'] = airport_to_base.get(dep_airport, 'UNKNOWN')
+                    first_departure_found = True
+                
+                # Track days
+                if day_letter != current_day_letter:
+                    current_day_letter = day_letter
+                    if day_letter not in [d['day'] for d in current_days]:
+                        current_days.append({'day': day_letter, 'flights': []})
+                
+                # Add flight to current day
+                for day in current_days:
+                    if day['day'] == day_letter:
+                        day['flights'].append(flight_num)
+                        break
         
         # Detect TOTAL CREDIT line
         if 'TOTAL CREDIT' in line and current_trip:
@@ -157,7 +214,7 @@ def parse_bidding_file(file_content, filename):
     return trips
 
 
-def analyze_trips(trips_data):
+def analyze_trips(trips_data, front_commute_time='1000', back_commute_time='2000'):
     """Analyze trip data and calculate metrics"""
     if not trips_data:
         return None
@@ -194,20 +251,132 @@ def analyze_trips(trips_data):
     total_credit = df['credit_minutes'].sum()
     metrics['avg_credit_per_day'] = (total_credit / total_days / 60) if total_days > 0 else 0
     
-    # Red-eye detection (flights departing after 10 PM or arriving before 6 AM)
-    # For this simplified version, we'll estimate based on TAFB and credit
-    metrics['red_eye_count'] = 0  # Placeholder - would need flight time parsing
+    # Commutability analysis - parse flight times from the raw data
+    commute_front = 0
+    commute_back = 0
+    commute_both = 0
     
-    # Commutability metrics (simplified - would need detailed flight time analysis)
-    metrics['commute_front'] = "Analysis requires detailed flight times"
-    metrics['commute_back'] = "Analysis requires detailed flight times"
-    metrics['commute_both'] = "Analysis requires detailed flight times"
+    for _, trip in df.iterrows():
+        base = trip.get('base')
+        if not base or not trip.get('days'):
+            continue
+        
+        # Get first and last day
+        days = trip['days']
+        if not days:
+            continue
+            
+        first_day = days[0]
+        last_day = days[-1]
+        
+        # Extract first departure time from first day
+        first_departure_time = extract_first_flight_time(trip, first_day, base)
+        
+        # Extract last arrival time from last day
+        last_arrival_time = extract_last_flight_time(trip, last_day, base)
+        
+        # Check commutability
+        is_front_commutable = first_departure_time >= front_commute_time if first_departure_time else False
+        is_back_commutable = last_arrival_time <= back_commute_time if last_arrival_time else False
+        
+        if is_front_commutable:
+            commute_front += 1
+        if is_back_commutable:
+            commute_back += 1
+        if is_front_commutable and is_back_commutable:
+            commute_both += 1
+    
+    metrics['commute_front'] = commute_front
+    metrics['commute_back'] = commute_back
+    metrics['commute_both'] = commute_both
+    
+    # Red-eye detection (flights departing after 2200 or arriving before 0600)
+    red_eye_count = 0
+    for _, trip in df.iterrows():
+        if has_red_eye(trip):
+            red_eye_count += 1
+    
+    metrics['red_eye_count'] = red_eye_count
     
     # Additional useful metrics
     metrics['total_trips'] = len(df)
     metrics['avg_tafb'] = df['tafb_minutes'].mean() / 60  # Hours
     
     return metrics, df
+
+
+def extract_first_flight_time(trip, first_day, base):
+    """Extract the first departure time from base airport"""
+    if not trip.get('flights'):
+        return None
+    
+    # Get airports for this base
+    base_airports = {
+        'ATL': ['ATL'],
+        'BOS': ['BOS'],
+        'NYC': ['JFK', 'LGA', 'EWR'],
+        'DTW': ['DTW'],
+        'SLC': ['SLC'],
+        'MSP': ['MSP'],
+        'SEA': ['SEA'],
+        'LAX': ['LAX', 'LGB', 'ONT']
+    }
+    
+    airports = base_airports.get(base, [])
+    
+    # Find first flight departing from base
+    for flight in trip['flights']:
+        if flight['departure_airport'] in airports:
+            return flight['departure_time']
+    
+    return None
+
+
+def extract_last_flight_time(trip, last_day, base):
+    """Extract the last arrival time to base airport"""
+    if not trip.get('flights'):
+        return None
+    
+    # Get airports for this base
+    base_airports = {
+        'ATL': ['ATL'],
+        'BOS': ['BOS'],
+        'NYC': ['JFK', 'LGA', 'EWR'],
+        'DTW': ['DTW'],
+        'SLC': ['SLC'],
+        'MSP': ['MSP'],
+        'SEA': ['SEA'],
+        'LAX': ['LAX', 'LGB', 'ONT']
+    }
+    
+    airports = base_airports.get(base, [])
+    
+    # Find last flight arriving at base (search backwards)
+    for flight in reversed(trip['flights']):
+        if flight['arrival_airport'] in airports:
+            return flight['arrival_time']
+    
+    return None
+
+
+def has_red_eye(trip):
+    """Check if trip contains a red-eye flight (departs after 2200 or arrives before 0600)"""
+    if not trip.get('flights'):
+        return False
+    
+    for flight in trip['flights']:
+        dep_time = flight.get('departure_time', '0000')
+        arr_time = flight.get('arrival_time', '0000')
+        
+        # Check if departure is after 10 PM (2200)
+        if dep_time >= '2200':
+            return True
+        
+        # Check if arrival is before 6 AM (0600)
+        if arr_time <= '0600' and arr_time != '0000':
+            return True
+    
+    return False
 
 
 def create_comparison_table(all_metrics, file_names):
@@ -358,6 +527,43 @@ def main():
         
         st.markdown("---")
         
+        # Commutability time selectors
+        st.header("⏰ Commutability Times")
+        st.markdown("Set time windows for commutable trips")
+        
+        # Generate 24-hour time options in 30-minute intervals
+        time_options = []
+        for hour in range(24):
+            for minute in ['00', '30']:
+                time_options.append(f"{hour:02d}{minute}")
+        
+        # Front end commutability
+        front_commute_time = st.selectbox(
+            "Front-End Commutable After",
+            options=time_options,
+            index=time_options.index('1000'),  # Default 10:00
+            help="First departure must be at or after this time"
+        )
+        
+        # Back end commutability
+        back_commute_time = st.selectbox(
+            "Back-End Commutable Before",
+            options=time_options,
+            index=time_options.index('2000'),  # Default 20:00
+            help="Last arrival must be at or before this time"
+        )
+        
+        # Display selected times in readable format
+        front_hour = int(front_commute_time[:2])
+        front_min = front_commute_time[2:]
+        back_hour = int(back_commute_time[:2])
+        back_min = back_commute_time[2:]
+        
+        st.caption(f"✈️ Front: After {front_hour:02d}:{front_min}")
+        st.caption(f"🏠 Back: Before {back_hour:02d}:{back_min}")
+        
+        st.markdown("---")
+        
         # Clear button
         if st.button("🗑️ Clear All Data", type="secondary", use_container_width=True):
             st.session_state.uploaded_files_data = {}
@@ -401,7 +607,7 @@ def main():
         
         for fname, trips in filtered_data.items():
             if trips:
-                metrics, df = analyze_trips(trips)
+                metrics, df = analyze_trips(trips, front_commute_time, back_commute_time)
                 all_metrics.append(metrics)
                 all_dfs.append(df)
             else:
@@ -440,6 +646,8 @@ def main():
             with col1:
                 st.subheader("📅 Trip Day Length Distribution")
                 trip_length_data = metrics['trip_day_length']
+                total_trips = metrics['total_trips']
+                
                 if trip_length_data:
                     fig = px.bar(
                         x=list(trip_length_data.keys()),
@@ -450,17 +658,20 @@ def main():
                     fig.update_traces(marker_color='#1f77b4')
                     st.plotly_chart(fig, use_container_width=True)
                     
-                    # Show table
+                    # Show table with percentages
                     df_display = pd.DataFrame({
                         'Trip Length': [f"{k}-Day" for k in trip_length_data.keys()],
-                        'Count': list(trip_length_data.values())
+                        'Count': list(trip_length_data.values()),
+                        'Percentage': [f"{(v/total_trips*100):.1f}%" for v in trip_length_data.values()]
                     })
                     st.dataframe(df_display, use_container_width=True, hide_index=True)
+                    st.caption(f"**Total: {total_trips} trips**")
             
             with col2:
                 st.subheader("🛬 One Leg on Last Day")
                 one_leg_data = metrics['one_leg_last_day']
                 if one_leg_data:
+                    one_leg_total = sum(one_leg_data.values())
                     fig = px.bar(
                         x=list(one_leg_data.keys()),
                         y=list(one_leg_data.values()),
@@ -472,22 +683,48 @@ def main():
                     
                     df_display = pd.DataFrame({
                         'Trip Length': [f"{k}-Day" for k in one_leg_data.keys()],
-                        'Count': list(one_leg_data.values())
+                        'Count': list(one_leg_data.values()),
+                        'Percentage': [f"{(v/total_trips*100):.1f}%" for v in one_leg_data.values()]
                     })
                     st.dataframe(df_display, use_container_width=True, hide_index=True)
+                    st.caption(f"**Total: {one_leg_total} trips ({one_leg_total/total_trips*100:.1f}% of all trips)**")
                 else:
                     st.info("No trips with one leg on last day found")
             
-            # Commutability section (placeholder)
+            # Commutability section
             st.markdown("---")
             st.subheader("🏠 Commutability Analysis")
-            col1, col2, col3 = st.columns(3)
+            
+            # Display selected times
+            front_hour = int(front_commute_time[:2])
+            front_min = front_commute_time[2:]
+            back_hour = int(back_commute_time[:2])
+            back_min = back_commute_time[2:]
+            
+            st.caption(f"Front-end commutable: First departure at or after {front_hour:02d}:{front_min} | " +
+                      f"Back-end commutable: Last arrival at or before {back_hour:02d}:{back_min}")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
             with col1:
-                st.info("**Front Commutability**\n\nRequires detailed flight time analysis")
+                front_count = metrics.get('commute_front', 0)
+                front_pct = (front_count / total_trips * 100) if total_trips > 0 else 0
+                st.metric("Front Commutable", f"{front_count}", f"{front_pct:.1f}%")
+            
             with col2:
-                st.info("**Back Commutability**\n\nRequires detailed flight time analysis")
+                back_count = metrics.get('commute_back', 0)
+                back_pct = (back_count / total_trips * 100) if total_trips > 0 else 0
+                st.metric("Back Commutable", f"{back_count}", f"{back_pct:.1f}%")
+            
             with col3:
-                st.info("**Both Commutable**\n\nRequires detailed flight time analysis")
+                both_count = metrics.get('commute_both', 0)
+                both_pct = (both_count / total_trips * 100) if total_trips > 0 else 0
+                st.metric("Both Commutable", f"{both_count}", f"{both_pct:.1f}%")
+            
+            with col4:
+                red_eye_count = metrics.get('red_eye_count', 0)
+                red_eye_pct = (red_eye_count / total_trips * 100) if total_trips > 0 else 0
+                st.metric("Red-Eye Trips", f"{red_eye_count}", f"{red_eye_pct:.1f}%")
         
         else:
             # Multiple file comparison
