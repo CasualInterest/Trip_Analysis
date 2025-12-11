@@ -60,6 +60,7 @@ selected_base = st.sidebar.selectbox("Select Base", base_options)
 if st.sidebar.button("🗑️ Clear All Data", type="primary"):
     st.session_state.uploaded_files = {}
     st.session_state.analysis_results = {}
+    st.session_state.pending_files = {}
     st.rerun()
 
 # Main title
@@ -83,39 +84,59 @@ with col2:
     if len(st.session_state.uploaded_files) >= 12:
         st.warning("⚠️ Maximum 12 files")
 
+# Initialize pending files in session state if not exists
+if 'pending_files' not in st.session_state:
+    st.session_state.pending_files = {}
+
 # Process new uploads
 if uploaded:
     for file in uploaded:
-        if file.name not in st.session_state.uploaded_files and len(st.session_state.uploaded_files) < 12:
-            # Get month/year from user
-            with st.expander(f"📅 Set Date for {file.name}", expanded=True):
-                col_m, col_y = st.columns(2)
-                with col_m:
-                    month = st.selectbox(
-                        "Month",
-                        ["January", "February", "March", "April", "May", "June",
-                         "July", "August", "September", "October", "November", "December"],
-                        key=f"month_{file.name}"
-                    )
-                with col_y:
-                    year = st.number_input(
-                        "Year",
-                        min_value=2020,
-                        max_value=2030,
-                        value=2026,
-                        key=f"year_{file.name}"
-                    )
-                
-                if st.button(f"✅ Confirm {file.name}", key=f"confirm_{file.name}"):
-                    # Read file content
-                    content = file.read().decode('utf-8')
-                    st.session_state.uploaded_files[file.name] = {
-                        'content': content,
+        if file.name not in st.session_state.uploaded_files and file.name not in st.session_state.pending_files and len(st.session_state.uploaded_files) < 12:
+            # Read file content immediately
+            content = file.read().decode('utf-8')
+            st.session_state.pending_files[file.name] = {
+                'content': content,
+                'month': 'January',
+                'year': 2026
+            }
+
+# Show date selection for pending files
+if st.session_state.pending_files:
+    st.subheader("📅 Set Dates for New Files")
+    
+    for fname in list(st.session_state.pending_files.keys()):
+        with st.expander(f"Set Date for {fname}", expanded=True):
+            col_m, col_y, col_btn = st.columns([2, 1, 1])
+            
+            with col_m:
+                month = st.selectbox(
+                    "Month",
+                    ["January", "February", "March", "April", "May", "June",
+                     "July", "August", "September", "October", "November", "December"],
+                    key=f"month_{fname}_{id(fname)}"  # Add unique id to prevent conflicts
+                )
+            with col_y:
+                year = st.number_input(
+                    "Year",
+                    min_value=2020,
+                    max_value=2030,
+                    value=2026,
+                    key=f"year_{fname}_{id(fname)}"
+                )
+            with col_btn:
+                st.write("")  # Spacer
+                st.write("")  # Spacer
+                if st.button("✅ Confirm", key=f"confirm_{fname}_{id(fname)}"):
+                    # Move from pending to uploaded
+                    file_data = st.session_state.pending_files[fname]
+                    st.session_state.uploaded_files[fname] = {
+                        'content': file_data['content'],
                         'month': month,
                         'year': year,
-                        'display_name': f"{month} {year} - {file.name}"
+                        'display_name': f"{month} {year} - {fname}"
                     }
-                    st.success(f"✅ Added {file.name}")
+                    del st.session_state.pending_files[fname]
+                    st.success(f"✅ Added {fname}")
                     st.rerun()
 
 # Display loaded files
