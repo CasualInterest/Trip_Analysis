@@ -46,7 +46,34 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 
-def parse_time_to_minutes(time_str):
+def calculate_trip_length(trip):
+    """Calculate trip length with red-eye rule"""
+    if not trip.get('days'):
+        return 0
+    
+    # Base length from last day letter
+    day_letters = ['A', 'B', 'C', 'D', 'E']
+    last_day = trip['days'][-1]['day']
+    base_length = day_letters.index(last_day) + 1
+    
+    # Check red-eye rule on last flight
+    if trip.get('flights'):
+        last_flight = trip['flights'][-1]
+        dep_time = int(last_flight['departure_time'])
+        arr_time = int(last_flight['arrival_time'])
+        
+        # Red-eye rule: departs >= 2000 AND arrives >= 0200
+        if dep_time >= 2000 and arr_time >= 200:
+            return base_length + 1
+    
+    return base_length
+
+
+def get_base_last_day(trip):
+    """Get the base last day letter (before red-eye adjustment)"""
+    if not trip.get('days'):
+        return None
+    return trip['days'][-1]['day']
     """Convert time string (HH.MM or HH:MM) to minutes"""
     if pd.isna(time_str) or time_str == '':
         return 0
@@ -68,7 +95,276 @@ def parse_time_to_minutes(time_str):
         return 0
 
 
-def parse_bidding_file(file_content, filename):
+def parse_bidding_file(file_content, filename, month_name, year):
+    """Parse the bidding data file and extract trip information with occurrence counting"""
+    from datetime import datetime, timedelta
+    from calendar import monthrange
+    
+    lines = file_content.split('\n')
+    
+    # Month name to number
+    month_map = {
+        'January': 1, 'February': 2, 'March': 3, 'April': 4,
+        'May': 5, 'June': 6, 'July': 7, 'August': 8,
+        'September': 9, 'October': 10, 'November': 11, 'December': 12
+    }
+    month_num = month_map.get(month_name, 1)
+    
+    # Base determination from airport codes
+    airport_to_base = {
+        'ATL': 'ATL',
+        'BOS': 'BOS',
+        'JFK': 'NYC', 'LGA': 'NYC', 'EWR': 'NYC',
+        'DTW': 'DTW',
+        'SLC': 'SLC',
+        'MSP': 'MSP',
+        'SEA': 'SEA',
+        'LAX': 'LAX', 'LGB': 'LAX', 'ONT': 'LAX'
+    }
+    
+    # Day of week codes
+    dow_map = {'MO': 0, 'TU': 1, 'WE': 2, 'TH': 3, 'FR': 4, 'SA': 5, 'SU': 6}
+    
+    trips = []
+    current_trip = None
+    current_days = []
+    first_departure_found = False
+    current_day_letter = None
+    
+    for i, line in enumerate(lines):
+        # Detect trip number and parse effective dates
+        trip_match = re.search(r'^\s+#(\d+)\s+([A-Z\s]+?)\s+EFFECTIVE\s+(.+?)\s+CHECK-IN', line)
+        if trip_match:
+            # Save previous trip if exists
+            if current_trip:
+                current_trip['days'] = current_days
+                trips.append(current_trip)
+            
+            # Parse trip header
+            trip_number = trip_match.group(1)
+            days_of_week_str = trip_match.group(2).strip()
+            effective_dates = trip_match.group(3).strip()
+            
+            # Extract days of week
+            days_of_week = []
+            for dow_code in ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU']:
+                if dow_code in days_of_week_str:
+                    days_of_week.append(dow_map[dow_code])
+            
+            # Start new trip
+            current_trip = {
+                'trip_number': trip_number,
+                'days_of_week': days_of_week,
+                'effective_dates': effective_dates,
+                'except_dates': [],
+                'occurrences': 0,  # Will be calculated
+                'base': None,
+                'filename': filename,
+                'month': month_name,
+                'year': year,
+                'first_departure': None,
+                'flights': []
+            }
+            current_days = []
+            first_departure_found = False
+            current_day_letter = None
+            continue
+        
+        # Detect EXCEPT dates
+        if current_trip and 'EXCEPT' in line:
+            except_match = re.findall(r'([A-Z]{3}\s?\d+)', line)
+            for date_str in except_match:
+                current_trip['except_dates'].append(date_str.replace(' ', ''))
+        
+        # Detect day lines and flight information
+        if current_trip:
+            # Regular flight: A FLIGHT# DEPART_AIRPORT TIME ARRIVE_AIRPORT TIME
+            flight_match = re.search(r'^\s+([A-E])\s+(\d+)\s+([A-Z]{3})\s+(\d{4})\*?\s+([A-Z]{3})\s+(\d{4})\*?', line)
+            # Deadhead flight: A DH FLIGHT# DEPART_AIRPORT TIME ARRIVE_AIRPORT TIME
+            dh_match = re.search(r'^\s+([A-E])\s+DH\s+(\d+)\s+([A-Z]{3})\s+(\d{4})\*?\s+([A-Z]{3})\s+(\d{4})\*?', line)
+            
+            if flight_match:
+                day_letter = flight_match.group(1)
+                flight_num = flight_match.group(2)
+                dep_airport = flight_match.group(3)
+                dep_time = flight_match.group(4)
+                arr_airport = flight_match.group(5)
+                arr_time = flight_match.group(6)
+                
+                flight_info = {
+                    'day': day_letter,
+                    'flight_number': flight_num,
+                    'departure_airport': dep_airport,
+                    'departure_time': dep_time,
+                    'arrival_airport': arr_airport,
+                    'arrival_time': arr_time,
+                    'is_deadhead': False
+                }
+                
+                current_trip['flights'].append(flight_info)
+                
+                # Determine base from first flight
+                if not first_departure_found:
+                    current_trip['first_departure'] = dep_airport
+                    current_trip['base'] = airport_to_base.get(dep_airport, 'UNKNOWN')
+                    first_departure_found = True
+                
+                # Track days
+                if day_letter != current_day_letter:
+                    current_day_letter = day_letter
+                    if day_letter not in [d['day'] for d in current_days]:
+                        current_days.append({'day': day_letter, 'flights': []})
+                
+                # Add flight to current day
+                for day in current_days:
+                    if day['day'] == day_letter:
+                        day['flights'].append(flight_num)
+                        break
+            
+            elif dh_match:
+                day_letter = dh_match.group(1)
+                flight_num = dh_match.group(2)
+                dep_airport = dh_match.group(3)
+                dep_time = dh_match.group(4)
+                arr_airport = dh_match.group(5)
+                arr_time = dh_match.group(6)
+                
+                flight_info = {
+                    'day': day_letter,
+                    'flight_number': flight_num,
+                    'departure_airport': dep_airport,
+                    'departure_time': dep_time,
+                    'arrival_airport': arr_airport,
+                    'arrival_time': arr_time,
+                    'is_deadhead': True
+                }
+                
+                current_trip['flights'].append(flight_info)
+                
+                # Determine base from first flight (even if DH)
+                if not first_departure_found:
+                    current_trip['first_departure'] = dep_airport
+                    current_trip['base'] = airport_to_base.get(dep_airport, 'UNKNOWN')
+                    first_departure_found = True
+                
+                # Track days
+                if day_letter != current_day_letter:
+                    current_day_letter = day_letter
+                    if day_letter not in [d['day'] for d in current_days]:
+                        current_days.append({'day': day_letter, 'flights': []})
+                
+                # Add flight to current day
+                for day in current_days:
+                    if day['day'] == day_letter:
+                        day['flights'].append(flight_num)
+                        break
+        
+        # Detect TOTAL CREDIT line
+        if 'TOTAL CREDIT' in line and current_trip:
+            credit_match = re.search(r'TOTAL CREDIT\s+([\d:.]+)TL', line)
+            tafb_match = re.search(r'TAFB\s+([\d:.]+)', line)
+            
+            if credit_match:
+                current_trip['total_credit'] = credit_match.group(1)
+            if tafb_match:
+                current_trip['tafb'] = tafb_match.group(1)
+    
+    # Add last trip
+    if current_trip:
+        current_trip['days'] = current_days
+        trips.append(current_trip)
+    
+    # Calculate occurrences for each trip
+    for trip in trips:
+        trip['occurrences'] = calculate_occurrences(
+            trip['days_of_week'],
+            trip['effective_dates'],
+            trip['except_dates'],
+            month_num,
+            year
+        )
+    
+    return trips
+
+
+def calculate_occurrences(days_of_week, effective_dates, except_dates, month_num, year):
+    """Calculate how many times a trip occurs based on date range and days of week"""
+    from datetime import datetime, timedelta
+    
+    if not days_of_week:
+        return 1  # Default to 1 if no days specified
+    
+    # Parse effective date range
+    # Formats: "JAN01 ONLY", "JAN21-JAN. 28", "DEC31-JAN. 09"
+    
+    if 'ONLY' in effective_dates:
+        # Single date
+        date_match = re.search(r'([A-Z]{3})(\d+)', effective_dates)
+        if date_match:
+            month_str = date_match.group(1)
+            day = int(date_match.group(2))
+            
+            # Convert month abbreviation
+            month_abbr_map = {
+                'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
+                'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12
+            }
+            month = month_abbr_map.get(month_str, month_num)
+            
+            # Check if this date's day of week is in the specified days
+            try:
+                date = datetime(year, month, day)
+                if date.weekday() in days_of_week:
+                    return 1
+            except:
+                pass
+            return 0
+    
+    # Date range
+    range_match = re.search(r'([A-Z]{3})(\d+)-([A-Z]{3})\.\s*(\d+)', effective_dates)
+    if range_match:
+        start_month_str = range_match.group(1)
+        start_day = int(range_match.group(2))
+        end_month_str = range_match.group(3)
+        end_day = int(range_match.group(4))
+        
+        month_abbr_map = {
+            'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
+            'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12
+        }
+        
+        start_month = month_abbr_map.get(start_month_str, month_num)
+        end_month = month_abbr_map.get(end_month_str, month_num)
+        
+        # Handle year boundary crossing (e.g., DEC31-JAN09)
+        start_year = year
+        end_year = year
+        if start_month > end_month:
+            start_year = year - 1
+        
+        try:
+            start_date = datetime(start_year, start_month, start_day)
+            end_date = datetime(end_year, end_month, end_day)
+            
+            # Count occurrences
+            count = 0
+            current_date = start_date
+            while current_date <= end_date:
+                if current_date.weekday() in days_of_week:
+                    # Check if this date is in except_dates
+                    date_str = f"{current_date.strftime('%b').upper()}{current_date.day:02d}"
+                    date_str_no_zero = f"{current_date.strftime('%b').upper()}{current_date.day}"
+                    
+                    if date_str not in except_dates and date_str_no_zero not in except_dates:
+                        count += 1
+                
+                current_date += timedelta(days=1)
+            
+            return count
+        except:
+            pass
+    
+    return 1  # Default to 1 if parsing fails
     """Parse the bidding data file and extract trip information"""
     lines = file_content.split('\n')
     
@@ -214,7 +510,186 @@ def parse_bidding_file(file_content, filename):
     return trips
 
 
+def get_base_last_day(trip):
+    """Get the base last day letter (before red-eye adjustment)"""
+    if not trip.get('days'):
+        return None
+    return trip['days'][-1]['day']
+
+
+def parse_time_to_minutes(time_str):
+    """Convert time string (HH.MM or HH:MM) to minutes"""
+    if pd.isna(time_str) or time_str == '':
+        return 0
+    
+    time_str = str(time_str).strip()
+    # Handle both . and : separators
+    if '.' in time_str:
+        parts = time_str.split('.')
+    elif ':' in time_str:
+        parts = time_str.split(':')
+    else:
+        return 0
+    
+    try:
+        hours = int(parts[0])
+        minutes = int(parts[1]) if len(parts) > 1 else 0
+        return hours * 60 + minutes
+    except:
+        return 0
+
+
 def analyze_trips(trips_data, front_commute_time='1000', back_commute_time='2000'):
+    """Analyze trip data and calculate metrics with proper occurrence counting"""
+    if not trips_data:
+        return None
+    
+    df = pd.DataFrame(trips_data)
+    
+    # Calculate trip lengths with red-eye rule
+    df['trip_length'] = df.apply(calculate_trip_length, axis=1)
+    df['base_last_day'] = df.apply(get_base_last_day, axis=1)
+    df['credit_minutes'] = df['total_credit'].apply(parse_time_to_minutes)
+    df['tafb_minutes'] = df['tafb'].apply(parse_time_to_minutes)
+    df['occurrences'] = df['occurrences'].fillna(1).astype(int)
+    
+    # Calculate metrics
+    metrics = {}
+    
+    # Trip day length distribution (weighted by occurrences)
+    trip_length_counts = {}
+    for _, trip in df.iterrows():
+        length = trip['trip_length']
+        occurrences = trip['occurrences']
+        trip_length_counts[length] = trip_length_counts.get(length, 0) + occurrences
+    
+    metrics['trip_day_length'] = trip_length_counts
+    
+    # Trips with one leg on last day (check base last day, not red-eye adjusted)
+    one_leg_last_day_counts = {}
+    for _, trip in df.iterrows():
+        if trip['days'] and len(trip['days']) > 0:
+            last_day = trip['days'][-1]
+            if len(last_day.get('flights', [])) == 1:
+                length = trip['trip_length']
+                occurrences = trip['occurrences']
+                one_leg_last_day_counts[length] = one_leg_last_day_counts.get(length, 0) + occurrences
+    
+    metrics['one_leg_last_day'] = one_leg_last_day_counts
+    
+    # Average credit per trip (by trip length, weighted by occurrences)
+    credit_by_length = {}
+    count_by_length = {}
+    
+    for _, trip in df.iterrows():
+        length = trip['trip_length']
+        credit = trip['credit_minutes']
+        occurrences = trip['occurrences']
+        
+        if length not in credit_by_length:
+            credit_by_length[length] = 0
+            count_by_length[length] = 0
+        
+        credit_by_length[length] += credit * occurrences
+        count_by_length[length] += occurrences
+    
+    avg_credit_per_trip = {}
+    for length in credit_by_length:
+        if count_by_length[length] > 0:
+            avg_credit_per_trip[length] = credit_by_length[length] / count_by_length[length] / 60  # Convert to hours
+    
+    metrics['avg_credit_per_trip'] = avg_credit_per_trip
+    
+    # Overall average credit per trip
+    total_credit = sum(credit_by_length.values())
+    total_count = sum(count_by_length.values())
+    metrics['avg_credit_per_trip_overall'] = (total_credit / total_count / 60) if total_count > 0 else 0
+    
+    # Average credit per day (credit / trip_length, weighted by occurrences)
+    credit_per_day_by_length = {}
+    
+    for _, trip in df.iterrows():
+        length = trip['trip_length']
+        if length == 0:
+            continue
+        
+        credit = trip['credit_minutes']
+        occurrences = trip['occurrences']
+        credit_per_day = credit / length
+        
+        if length not in credit_per_day_by_length:
+            credit_per_day_by_length[length] = []
+        
+        for _ in range(occurrences):
+            credit_per_day_by_length[length].append(credit_per_day)
+    
+    avg_credit_per_day = {}
+    for length in credit_per_day_by_length:
+        avg_credit_per_day[length] = sum(credit_per_day_by_length[length]) / len(credit_per_day_by_length[length]) / 60  # Convert to hours
+    
+    metrics['avg_credit_per_day'] = avg_credit_per_day
+    
+    # Overall average credit per day
+    all_credit_per_day = []
+    for length_list in credit_per_day_by_length.values():
+        all_credit_per_day.extend(length_list)
+    metrics['avg_credit_per_day_overall'] = (sum(all_credit_per_day) / len(all_credit_per_day) / 60) if all_credit_per_day else 0
+    
+    # Red-eye analysis (ANY leg meets criteria, weighted by occurrences)
+    red_eye_by_length = {}
+    
+    for _, trip in df.iterrows():
+        length = trip['trip_length']
+        occurrences = trip['occurrences']
+        has_red_eye_flight = has_red_eye_updated(trip)
+        
+        if length not in red_eye_by_length:
+            red_eye_by_length[length] = {'with_red_eye': 0, 'total': 0}
+        
+        red_eye_by_length[length]['total'] += occurrences
+        if has_red_eye_flight:
+            red_eye_by_length[length]['with_red_eye'] += occurrences
+    
+    metrics['red_eye_by_length'] = red_eye_by_length
+    
+    # Commutability analysis with custom times
+    commute_by_length = {}
+    
+    for _, trip in df.iterrows():
+        length = trip['trip_length']
+        occurrences = trip['occurrences']
+        base = trip.get('base')
+        
+        if length not in commute_by_length:
+            commute_by_length[length] = {
+                'front': 0, 'back': 0, 'both': 0, 'total': 0
+            }
+        
+        commute_by_length[length]['total'] += occurrences
+        
+        # Calculate report time (first departure - 60 minutes)
+        report_time = calculate_report_time(trip)
+        is_front_commutable = report_time >= int(front_commute_time) if report_time else False
+        
+        # Calculate release time (last ATL arrival + 45 minutes)
+        release_time = calculate_release_time(trip, base)
+        is_back_commutable = release_time <= int(back_commute_time) if release_time else False
+        
+        if is_front_commutable:
+            commute_by_length[length]['front'] += occurrences
+        if is_back_commutable:
+            commute_by_length[length]['back'] += occurrences
+        if is_front_commutable and is_back_commutable:
+            commute_by_length[length]['both'] += occurrences
+    
+    metrics['commute_by_length'] = commute_by_length
+    
+    # Overall totals
+    metrics['total_trips'] = total_count
+    metrics['total_occurrences'] = total_count
+    metrics['avg_tafb'] = (df['tafb_minutes'] * df['occurrences']).sum() / total_count / 60 if total_count > 0 else 0
+    
+    return metrics, df
     """Analyze trip data and calculate metrics"""
     if not trips_data:
         return None
@@ -305,78 +780,104 @@ def analyze_trips(trips_data, front_commute_time='1000', back_commute_time='2000
     return metrics, df
 
 
-def extract_first_flight_time(trip, first_day, base):
-    """Extract the first departure time from base airport"""
-    if not trip.get('flights'):
-        return None
-    
-    # Get airports for this base
-    base_airports = {
-        'ATL': ['ATL'],
-        'BOS': ['BOS'],
-        'NYC': ['JFK', 'LGA', 'EWR'],
-        'DTW': ['DTW'],
-        'SLC': ['SLC'],
-        'MSP': ['MSP'],
-        'SEA': ['SEA'],
-        'LAX': ['LAX', 'LGB', 'ONT']
-    }
-    
-    airports = base_airports.get(base, [])
-    
-    # Find first flight departing from base
-    for flight in trip['flights']:
-        if flight['departure_airport'] in airports:
-            return flight['departure_time']
-    
-    return None
 
-
-def extract_last_flight_time(trip, last_day, base):
-    """Extract the last arrival time to base airport"""
-    if not trip.get('flights'):
-        return None
-    
-    # Get airports for this base
-    base_airports = {
-        'ATL': ['ATL'],
-        'BOS': ['BOS'],
-        'NYC': ['JFK', 'LGA', 'EWR'],
-        'DTW': ['DTW'],
-        'SLC': ['SLC'],
-        'MSP': ['MSP'],
-        'SEA': ['SEA'],
-        'LAX': ['LAX', 'LGB', 'ONT']
-    }
-    
-    airports = base_airports.get(base, [])
-    
-    # Find last flight arriving at base (search backwards)
-    for flight in reversed(trip['flights']):
-        if flight['arrival_airport'] in airports:
-            return flight['arrival_time']
-    
-    return None
-
-
-def has_red_eye(trip):
-    """Check if trip contains a red-eye flight (departs after 2200 or arrives before 0600)"""
+def has_red_eye_updated(trip):
+    """Check if trip contains a red-eye flight (ANY leg: departs >=2000 AND arrives >=0200)"""
     if not trip.get('flights'):
         return False
     
     for flight in trip['flights']:
-        dep_time = flight.get('departure_time', '0000')
-        arr_time = flight.get('arrival_time', '0000')
-        
-        # Check if departure is after 10 PM (2200)
-        if dep_time >= '2200':
-            return True
-        
-        # Check if arrival is before 6 AM (0600)
-        if arr_time <= '0600' and arr_time != '0000':
-            return True
+        try:
+            dep_time = int(flight.get('departure_time', '0000'))
+            arr_time = int(flight.get('arrival_time', '0000'))
+            
+            # Check if departure >= 2000 AND arrival >= 0200
+            if dep_time >= 2000 and arr_time >= 200:
+                return True
+        except:
+            continue
     
     return False
+
+
+def calculate_report_time(trip):
+    """Calculate report time: first departure - 60 minutes"""
+    if not trip.get('flights'):
+        return None
+    
+    try:
+        first_dep_time = int(trip['flights'][0]['departure_time'])
+        
+        # Convert to minutes
+        hours = first_dep_time // 100
+        minutes = first_dep_time % 100
+        total_minutes = hours * 60 + minutes
+        
+        # Subtract 60 minutes
+        report_minutes = total_minutes - 60
+        
+        # Handle wraparound
+        if report_minutes < 0:
+            report_minutes += 1440  # Add 24 hours
+        
+        # Convert back to HHMM format
+        report_hours = report_minutes // 60
+        report_mins = report_minutes % 60
+        return report_hours * 100 + report_mins
+    except:
+        return None
+
+
+def calculate_release_time(trip, base):
+    """Calculate release time: last arrival at base + 45 minutes"""
+    if not trip.get('flights') or not base:
+        return None
+    
+    # Get base airports
+    base_airports = {
+        'ATL': ['ATL'],
+        'BOS': ['BOS'],
+        'NYC': ['JFK', 'LGA', 'EWR'],
+        'DTW': ['DTW'],
+        'SLC': ['SLC'],
+        'MSP': ['MSP'],
+        'SEA': ['SEA'],
+        'LAX': ['LAX', 'LGB', 'ONT']
+    }
+    
+    airports = base_airports.get(base, [])
+    
+    # Find last arrival at base
+    last_arrival_time = None
+    for flight in reversed(trip['flights']):
+        if flight['arrival_airport'] in airports:
+            last_arrival_time = flight['arrival_time']
+            break
+    
+    if not last_arrival_time:
+        return None
+    
+    try:
+        arr_time = int(last_arrival_time)
+        
+        # Convert to minutes
+        hours = arr_time // 100
+        minutes = arr_time % 100
+        total_minutes = hours * 60 + minutes
+        
+        # Add 45 minutes
+        release_minutes = total_minutes + 45
+        
+        # Handle wraparound
+        if release_minutes >= 1440:
+            release_minutes -= 1440  # Subtract 24 hours
+        
+        # Convert back to HHMM format
+        release_hours = release_minutes // 60
+        release_mins = release_minutes % 60
+        return release_hours * 100 + release_mins
+    except:
+        return None
 
 
 def create_comparison_table(all_metrics, file_names):
@@ -471,6 +972,8 @@ def main():
         st.session_state.uploaded_files_data = {}
     if 'parsed_data' not in st.session_state:
         st.session_state.parsed_data = {}
+    if 'file_metadata' not in st.session_state:
+        st.session_state.file_metadata = {}  # Store month/year for each file
     
     # Sidebar
     with st.sidebar:
@@ -489,21 +992,62 @@ def main():
                 st.error("⚠️ Maximum 12 files allowed. Please remove some files.")
             else:
                 # Process uploaded files
+                new_files = []
                 for uploaded_file in uploaded_files:
                     if uploaded_file.name not in st.session_state.uploaded_files_data:
-                        file_content = uploaded_file.getvalue().decode('utf-8')
-                        st.session_state.uploaded_files_data[uploaded_file.name] = file_content
-                        
-                        # Parse the file
-                        trips = parse_bidding_file(file_content, uploaded_file.name)
-                        st.session_state.parsed_data[uploaded_file.name] = trips
+                        new_files.append(uploaded_file)
                 
-                st.success(f"✅ {len(uploaded_files)} file(s) loaded")
+                # If there are new files, prompt for month/year
+                if new_files:
+                    st.markdown("### 📅 Set Date for New Files")
+                    
+                    for uploaded_file in new_files:
+                        with st.expander(f"📄 {uploaded_file.name}", expanded=True):
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                month = st.selectbox(
+                                    "Month",
+                                    options=['January', 'February', 'March', 'April', 'May', 'June',
+                                            'July', 'August', 'September', 'October', 'November', 'December'],
+                                    key=f"month_{uploaded_file.name}"
+                                )
+                            
+                            with col2:
+                                year = st.number_input(
+                                    "Year",
+                                    min_value=2020,
+                                    max_value=2030,
+                                    value=2026,
+                                    step=1,
+                                    key=f"year_{uploaded_file.name}"
+                                )
+                            
+                            if st.button(f"Process {uploaded_file.name}", key=f"process_{uploaded_file.name}"):
+                                file_content = uploaded_file.getvalue().decode('utf-8')
+                                st.session_state.uploaded_files_data[uploaded_file.name] = file_content
+                                
+                                # Store metadata
+                                st.session_state.file_metadata[uploaded_file.name] = {
+                                    'month': month,
+                                    'year': year
+                                }
+                                
+                                # Parse the file
+                                trips = parse_bidding_file(file_content, uploaded_file.name, month, year)
+                                st.session_state.parsed_data[uploaded_file.name] = trips
+                                
+                                st.success(f"✅ {uploaded_file.name} processed for {month} {year}")
+                                st.rerun()
                 
-                # Show uploaded files
-                st.markdown("### Uploaded Files:")
-                for fname in st.session_state.uploaded_files_data.keys():
-                    st.markdown(f"- {fname}")
+                # Show already processed files
+                if st.session_state.uploaded_files_data:
+                    st.markdown("### Uploaded Files:")
+                    for fname in st.session_state.uploaded_files_data.keys():
+                        metadata = st.session_state.file_metadata.get(fname, {})
+                        month = metadata.get('month', 'Unknown')
+                        year = metadata.get('year', 'Unknown')
+                        st.markdown(f"- {fname} ({month} {year})")
         
         st.markdown("---")
         
@@ -568,6 +1112,7 @@ def main():
         if st.button("🗑️ Clear All Data", type="secondary", use_container_width=True):
             st.session_state.uploaded_files_data = {}
             st.session_state.parsed_data = {}
+            st.session_state.file_metadata = {}
             st.rerun()
     
     # Main content
@@ -701,30 +1246,36 @@ def main():
             back_hour = int(back_commute_time[:2])
             back_min = back_commute_time[2:]
             
-            st.caption(f"Front-end commutable: First departure at or after {front_hour:02d}:{front_min} | " +
-                      f"Back-end commutable: Last arrival at or before {back_hour:02d}:{back_min}")
+            st.caption(f"Report time threshold: {front_hour:02d}:{front_min} (First departure - 60 min) | " +
+                      f"Release time threshold: {back_hour:02d}:{back_min} (Last base arrival + 45 min)")
+            
+            # Calculate totals from commute_by_length
+            commute_by_length = metrics.get('commute_by_length', {})
+            total_front = sum(data['front'] for data in commute_by_length.values())
+            total_back = sum(data['back'] for data in commute_by_length.values())
+            total_both = sum(data['both'] for data in commute_by_length.values())
+            
+            # Calculate total red-eyes
+            red_eye_by_length = metrics.get('red_eye_by_length', {})
+            total_red_eye = sum(data['with_red_eye'] for data in red_eye_by_length.values())
             
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
-                front_count = metrics.get('commute_front', 0)
-                front_pct = (front_count / total_trips * 100) if total_trips > 0 else 0
-                st.metric("Front Commutable", f"{front_count}", f"{front_pct:.1f}%")
+                front_pct = (total_front / total_trips * 100) if total_trips > 0 else 0
+                st.metric("Front Commutable", f"{total_front}", f"{front_pct:.1f}%")
             
             with col2:
-                back_count = metrics.get('commute_back', 0)
-                back_pct = (back_count / total_trips * 100) if total_trips > 0 else 0
-                st.metric("Back Commutable", f"{back_count}", f"{back_pct:.1f}%")
+                back_pct = (total_back / total_trips * 100) if total_trips > 0 else 0
+                st.metric("Back Commutable", f"{total_back}", f"{back_pct:.1f}%")
             
             with col3:
-                both_count = metrics.get('commute_both', 0)
-                both_pct = (both_count / total_trips * 100) if total_trips > 0 else 0
-                st.metric("Both Commutable", f"{both_count}", f"{both_pct:.1f}%")
+                both_pct = (total_both / total_trips * 100) if total_trips > 0 else 0
+                st.metric("Both Commutable", f"{total_both}", f"{both_pct:.1f}%")
             
             with col4:
-                red_eye_count = metrics.get('red_eye_count', 0)
-                red_eye_pct = (red_eye_count / total_trips * 100) if total_trips > 0 else 0
-                st.metric("Red-Eye Trips", f"{red_eye_count}", f"{red_eye_pct:.1f}%")
+                red_eye_pct = (total_red_eye / total_trips * 100) if total_trips > 0 else 0
+                st.metric("Red-Eye Trips", f"{total_red_eye}", f"{red_eye_pct:.1f}%")
         
         else:
             # Multiple file comparison
