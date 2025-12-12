@@ -371,7 +371,7 @@ if st.session_state.analysis_results:
                     release_end = st.selectbox("Release End", time_options, index=len(time_options)-1, key='filter_release_end')
             
             with filter_col4:
-                search_term = st.text_input("Search Trip #", key='filter_search', placeholder="e.g., 44")
+                search_term = st.text_input("Search Trip #", key='filter_search', placeholder="e.g., 44", value=st.session_state.trip_filters.get('search_term', ''))
             
             with filter_col5:
                 st.write("")  # Spacer
@@ -387,9 +387,6 @@ if st.session_state.analysis_results:
                         'sort_column': None,
                         'sort_ascending': True
                     }
-                    # Clear the widgets by setting their keys
-                    if 'filter_search' in st.session_state:
-                        st.session_state.filter_search = ''
                     st.rerun()
             
             # Apply filters
