@@ -159,30 +159,43 @@ def get_total_pay(trip_lines):
     return None
 
 def get_flight_block_times(trip_lines):
-    """Extract all flight block times (BLK column)"""
+    """Extract all flight block times (BLK column) - returns list of decimal hours"""
     block_times = []
     
     for line in trip_lines:
         if len(line) < 10:
             continue
         
-        # Look for BLK. column pattern - time followed by decimal
-        # Pattern: number.number (e.g., "4.57", "2.18")
+        # Look for flight lines with departure/arrival pattern
+        # Format: airport time airport time decimal_number
+        # The decimal number after the second airport/time is the block time
         parts = line.split()
-        for i, part in enumerate(parts):
-            # Check if this looks like a block time (X.XX format)
-            if '.' in part and i + 1 < len(parts):
-                try:
-                    # Try to parse as float
-                    block_time = float(part)
-                    # Also check if next part might be a turn time (also has decimal)
-                    # Block times are typically between 0.5 and 15 hours
-                    if 0.1 <= block_time <= 15.0:
-                        # Convert to minutes for easier comparison
-                        block_minutes = int(block_time * 60)
-                        block_times.append(block_minutes)
-                except ValueError:
-                    continue
+        
+        for i in range(len(parts) - 1):
+            # Look for pattern: AIRPORT(3 letters) TIME(4 digits) then a decimal number
+            if (i >= 2 and 
+                len(parts[i-2]) == 3 and parts[i-2].isalpha() and  # departure airport
+                len(parts[i-1]) == 4 and parts[i-1].isdigit() and  # departure time
+                len(parts[i]) == 3 and parts[i].isalpha() and      # arrival airport
+                i + 1 < len(parts)):
+                
+                # Next part should be arrival time (4 digits possibly with *)
+                arr_time = parts[i+1].rstrip('*')
+                if len(arr_time) == 4 and arr_time.isdigit():
+                    # Look for block time in next few positions
+                    # Block time is decimal format like 2.37, 4.57, etc.
+                    for j in range(i+2, min(i+5, len(parts))):
+                        part = parts[j]
+                        # Check if this is a decimal number (block time)
+                        if '.' in part:
+                            try:
+                                block_time = float(part)
+                                # Block times are typically between 0.5 and 15 hours
+                                if 0.1 <= block_time <= 15.0:
+                                    block_times.append(block_time)
+                                    break
+                            except ValueError:
+                                continue
     
     return block_times
 
@@ -222,10 +235,21 @@ def extract_detailed_trip_info(trip_lines):
     total_credit = get_total_credit(trip_lines)
     total_pay = get_total_pay(trip_lines)
     
-    # Get block times for longest/shortest leg
+    # Get block times for longest/shortest leg (in decimal hours)
     block_times = get_flight_block_times(trip_lines)
-    longest_leg = max(block_times) if block_times else 0
-    shortest_leg = min(block_times) if block_times else 0
+    longest_leg = max(block_times) if block_times else 0  # decimal hours
+    shortest_leg = min(block_times) if block_times else 0  # decimal hours
+    
+    # Convert decimal hours to HH:MM format
+    def decimal_hours_to_hhmm(hours):
+        if hours == 0:
+            return "0:00"
+        h = int(hours)
+        m = int((hours - h) * 60)
+        return f"{h}:{m:02d}"
+    
+    longest_leg_str = decimal_hours_to_hhmm(longest_leg)
+    shortest_leg_str = decimal_hours_to_hhmm(shortest_leg)
     
     # Get raw trip text
     raw_text = '\n'.join(trip_lines)
@@ -239,8 +263,8 @@ def extract_detailed_trip_info(trip_lines):
         'release_time': release_time_str,
         'release_time_minutes': release_time_minutes,  # For filtering
         'total_legs': len(flight_legs),
-        'longest_leg': longest_leg,
-        'shortest_leg': shortest_leg,
+        'longest_leg': longest_leg_str,
+        'shortest_leg': shortest_leg_str,
         'total_credit': total_credit,
         'total_pay': total_pay,
         'raw_text': raw_text

@@ -421,65 +421,69 @@ if st.session_state.analysis_results:
             
             # Create dataframe for display
             if filtered_trips:
+                # Initialize selected trip in session state
+                if 'selected_trip_index' not in st.session_state:
+                    st.session_state.selected_trip_index = None
+                
                 df_data = []
                 for i, trip in enumerate(filtered_trips):
                     df_data.append({
-                        'index': i,
+                        'Select': False,
                         'Trip #': trip['trip_number'] or 'N/A',
                         'Base': trip['base'],
                         'Length': f"{trip['length']}-day",
                         'Report': trip['report_time'] or 'N/A',
                         'Release': trip['release_time'] or 'N/A',
-                        'Total Legs': trip['total_legs'],
-                        'Longest Leg (min)': trip['longest_leg'],
-                        'Shortest Leg (min)': trip['shortest_leg'],
-                        'Total Credit': f"{trip['total_credit']:.2f}" if trip['total_credit'] else 'N/A',
-                        'Total Pay': f"{trip['total_pay']:.2f}" if trip['total_pay'] else 'N/A'
+                        'Legs': trip['total_legs'],
+                        'Longest': trip['longest_leg'],
+                        'Shortest': trip['shortest_leg'],
+                        'Credit': f"{trip['total_credit']:.2f}" if trip['total_credit'] else 'N/A',
+                        'Pay': f"{trip['total_pay']:.2f}" if trip['total_pay'] else 'N/A'
                     })
                 
                 df = pd.DataFrame(df_data)
                 
-                # Column configuration for interactive table
-                column_config = {
-                    'index': None,  # Hide index column
-                    'Trip #': st.column_config.TextColumn('Trip #', width='small'),
-                    'Base': st.column_config.TextColumn('Base', width='small'),
-                    'Length': st.column_config.TextColumn('Length', width='small'),
-                    'Report': st.column_config.TextColumn('Report', width='small'),
-                    'Release': st.column_config.TextColumn('Release', width='small'),
-                    'Total Legs': st.column_config.NumberColumn('Legs', width='small'),
-                    'Longest Leg (min)': st.column_config.NumberColumn('Longest Leg', width='small'),
-                    'Shortest Leg (min)': st.column_config.NumberColumn('Shortest Leg', width='small'),
-                    'Total Credit': st.column_config.TextColumn('Credit', width='small'),
-                    'Total Pay': st.column_config.TextColumn('Pay', width='small')
-                }
-                
-                # Display table with selection
-                selected = st.dataframe(
+                # Use data_editor for selection capability
+                edited_df = st.data_editor(
                     df,
-                    column_config=column_config,
-                    use_container_width=True,
+                    column_config={
+                        'Select': st.column_config.CheckboxColumn(
+                            'Select',
+                            help='Click to view trip details',
+                            default=False,
+                            width='small'
+                        ),
+                        'Trip #': st.column_config.TextColumn('Trip #', width='small'),
+                        'Base': st.column_config.TextColumn('Base', width='small'),
+                        'Length': st.column_config.TextColumn('Length', width='small'),
+                        'Report': st.column_config.TextColumn('Report', width='small'),
+                        'Release': st.column_config.TextColumn('Release', width='small'),
+                        'Legs': st.column_config.NumberColumn('Legs', width='small'),
+                        'Longest': st.column_config.TextColumn('Longest', width='small'),
+                        'Shortest': st.column_config.TextColumn('Shortest', width='small'),
+                        'Credit': st.column_config.TextColumn('Credit', width='small'),
+                        'Pay': st.column_config.TextColumn('Pay', width='small')
+                    },
+                    disabled=['Trip #', 'Base', 'Length', 'Report', 'Release', 'Legs', 'Longest', 'Shortest', 'Credit', 'Pay'],
                     hide_index=True,
+                    use_container_width=True,
                     height=600
                 )
                 
-                # Expandable trip details
-                st.markdown("---")
-                st.markdown("### Trip Details")
-                st.markdown("*Select a trip number above to view raw trip details*")
+                # Check which trips are selected
+                selected_indices = edited_df[edited_df['Select']].index.tolist()
                 
-                # Trip selection via text input for now (expandable rows not directly supported)
-                selected_trip_num = st.text_input("Enter Trip # to view details:", key='selected_trip_detail')
-                
-                if selected_trip_num:
-                    # Find the trip
-                    matching_trips = [t for t in filtered_trips if t['trip_number'] == selected_trip_num]
-                    if matching_trips:
-                        trip_detail = matching_trips[0]
-                        with st.expander(f"Trip #{selected_trip_num} - Full Details", expanded=True):
-                            st.code(trip_detail['raw_text'], language=None)
-                    else:
-                        st.warning(f"Trip #{selected_trip_num} not found in filtered results.")
+                # Display details for selected trips
+                if selected_indices:
+                    st.markdown("---")
+                    st.markdown("### Selected Trip Details")
+                    
+                    for idx in selected_indices:
+                        trip = filtered_trips[idx]
+                        trip_num = trip['trip_number']
+                        
+                        with st.expander(f"Trip #{trip_num} - Full Details", expanded=True):
+                            st.code(trip['raw_text'], language=None)
             else:
                 st.info("No trips match the current filters.")
     
