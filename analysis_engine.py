@@ -734,20 +734,27 @@ def get_detailed_trips(file_content, base_filter, bid_month):
             section1, section2, split_idx = split_trip_into_sections(trip)
             
             if section1 and section2:
+                # Get base from section 1 (the original/complete trip)
+                # Section 2 might start with DH or incomplete data
+                first_airport_s1 = get_first_departure_airport(section1)
+                base_s1 = BASE_MAPPING.get(first_airport_s1, 'UNKNOWN') if first_airport_s1 else 'UNKNOWN'
+                
                 # SECTION 1: Uses file's TOTAL CREDIT/PAY, occurs on previous month date only (1 occurrence)
                 trip_info1 = extract_detailed_trip_info(section1)
+                # Override base with the one we determined
+                trip_info1['base'] = base_s1
                 # Include base in trip number for uniqueness
-                base_code = trip_info1['base'] if trip_info1['base'] != 'UNKNOWN' else ''
                 trip_num = trip_info1['trip_number'] if trip_info1['trip_number'] else 'N/A'
-                trip_info1['trip_number'] = f"{trip_num}-1 ({base_code})" if base_code else f"{trip_num}-1"
+                trip_info1['trip_number'] = f"{trip_num}-1 ({base_s1})" if base_s1 != 'UNKNOWN' else f"{trip_num}-1"
                 trip_info1['occurrences'] = 1
                 detailed_trips.append(trip_info1)
                 
                 # SECTION 2: Calculate credit manually, no pay, uses normal occurrence counting
                 trip_info2 = extract_detailed_trip_info(section2)
-                base_code = trip_info2['base'] if trip_info2['base'] != 'UNKNOWN' else ''
+                # Override base to match section 1
+                trip_info2['base'] = base_s1
                 trip_num = trip_info2['trip_number'] if trip_info2['trip_number'] else 'N/A'
-                trip_info2['trip_number'] = f"{trip_num}-2 ({base_code})" if base_code else f"{trip_num}-2"
+                trip_info2['trip_number'] = f"{trip_num}-2 ({base_s1})" if base_s1 != 'UNKNOWN' else f"{trip_num}-2"
                 
                 # Override credit calculation for section 2
                 calculated_credit = calculate_credit_for_section(section2)
