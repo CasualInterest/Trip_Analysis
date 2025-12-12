@@ -183,7 +183,7 @@ def split_trip_into_sections(trip_lines):
     """
     Split a trip into two sections at the point where day letters restart
     Section 1: Header + first occurrence of days + TOTAL CREDIT/PAY (for section 1 only)
-    Section 2: Second occurrence of days (no TOTAL CREDIT/PAY)
+    Section 2: Header + second occurrence of days (no TOTAL CREDIT/PAY)
     Returns: (section1_lines, section2_lines, split_index)
     """
     day_letters = []
@@ -225,12 +225,10 @@ def split_trip_into_sections(trip_lines):
             section2_end = i
             break
     
-    # Section 2 needs the header lines too (trip number, EFFECTIVE, etc.)
-    header_lines = []
-    for line in trip_lines:
-        if 'EFFECTIVE' in line:
-            break
-        header_lines.append(line)
+    # Section 2 needs ALL header lines (trip number, EFFECTIVE, DAY header, etc.)
+    # Find where day letters start in the original trip
+    first_day_line = day_line_indices[0] if day_line_indices else split_index
+    header_lines = trip_lines[:first_day_line]
     
     section2 = header_lines + trip_lines[split_index:section2_end]
     
