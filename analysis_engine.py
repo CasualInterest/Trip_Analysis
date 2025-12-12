@@ -381,75 +381,309 @@ def analyze_file(file_content, base_filter, front_commute_minutes, back_commute_
     return result
 
 def generate_pdf_report(analysis_results, uploaded_files, base_filter, front_time, back_time):
-    """Generate PDF report of analysis results"""
+    """Generate PDF report with tables on page 1 and trend graphs on page 2+"""
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter))
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), 
+                           topMargin=0.5*inch, bottomMargin=0.5*inch,
+                           leftMargin=0.5*inch, rightMargin=0.5*inch)
     story = []
     styles = getSampleStyleSheet()
     
+    # Sort files by date
+    month_order = {
+        'January': 1, 'February': 2, 'March': 3, 'April': 4,
+        'May': 5, 'June': 6, 'July': 7, 'August': 8,
+        'September': 9, 'October': 10, 'November': 11, 'December': 12
+    }
+    
+    sorted_files = sorted(
+        analysis_results.keys(),
+        key=lambda f: (uploaded_files[f]['year'], month_order[uploaded_files[f]['month']])
+    )
+    
+    num_files = len(sorted_files)
+    
     # Title
-    title_style = styles['Title']
+    title_style = ParagraphStyle('CustomTitle', parent=styles['Title'], fontSize=16, spaceAfter=0.1*inch)
     story.append(Paragraph("Pilot Trip Scheduling Analysis Report", title_style))
-    story.append(Spacer(1, 0.3*inch))
     
     # Settings
-    settings_text = f"<b>Settings:</b> Base Filter: {base_filter} | Front-End: ≥{front_time} | Back-End: ≤{back_time}"
+    settings_text = f"<b>Base:</b> {base_filter} | <b>Front-End:</b> ≥{front_time} | <b>Back-End:</b> ≤{back_time}"
     story.append(Paragraph(settings_text, styles['Normal']))
-    story.append(Spacer(1, 0.2*inch))
+    story.append(Spacer(1, 0.1*inch))
     
-    # Summary table for each file
-    for fname, result in analysis_results.items():
-        display_name = uploaded_files[fname]['display_name']
-        
-        story.append(Paragraph(f"<b>{display_name}</b>", styles['Heading2']))
-        story.append(Spacer(1, 0.1*inch))
-        
-        # Summary metrics
-        data = [
-            ['Metric', 'Value'],
-            ['Total Trips', str(result['total_trips'])],
-            ['Avg Trip Length', f"{result['avg_trip_length']:.2f} days"],
-            ['Avg Credit/Trip', f"{result['avg_credit_per_trip']:.2f} hrs"],
-            ['Avg Credit/Day', f"{result['avg_credit_per_day']:.2f} hrs/day"],
-            ['Red-Eye Rate', f"{result['redeye_rate']:.1f}%"],
-            ['Front-End Commute', f"{result['front_commute_rate']:.1f}%"],
-            ['Back-End Commute', f"{result['back_commute_rate']:.1f}%"],
-            ['Both Ends Commute', f"{result['both_commute_rate']:.1f}%"],
-        ]
-        
-        t = Table(data, colWidths=[3*inch, 2*inch])
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
-        ]))
-        story.append(t)
-        story.append(Spacer(1, 0.3*inch))
-        
-        # Trip length distribution
-        data = [['Length', 'Count', 'Percentage']]
-        for length in range(1, 6):
-            count = result['trip_counts'][length]
-            pct = count / result['total_trips'] * 100 if result['total_trips'] > 0 else 0
-            data.append([f"{length}-day", str(count), f"{pct:.1f}%"])
-        
-        t = Table(data, colWidths=[1.5*inch, 1.5*inch, 1.5*inch])
+    # Calculate column widths based on number of files
+    if num_files == 1:
+        col_widths = [2*inch] + [1.2*inch] * 6
+    elif num_files == 2:
+        col_widths = [1.8*inch] + [1.0*inch] * 6
+    else:
+        # For 3+ files, make columns narrower
+        available_width = 10*inch  # landscape letter minus margins
+        file_col_width = (available_width - 1.5*inch) / 6  # 6 columns (1-day through Overall)
+        col_widths = [1.5*inch] + [file_col_width] * 6
+    
+    # Helper function to create table
+    def create_table(data, title):
+        story.append(Paragraph(f"<b>{title}</b>", ParagraphStyle('Heading', fontSize=10, spaceAfter=0.05*inch)))
+        t = Table(data, colWidths=col_widths)
         t.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ('FONTSIZE', (0, 0), (-1, -1), 7),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+            ('TOPPADDING', (0, 0), (-1, 0), 4),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ]))
-        story.append(Paragraph("<b>Trip Length Distribution</b>", styles['Heading3']))
         story.append(t)
-        
+        story.append(Spacer(1, 0.05*inch))
+    
+    # 1. Trip Length Distribution
+    data = [['File', '1-day', '2-day', '3-day', '4-day', '5-day', 'Total']]
+    for fname in sorted_files:
+        result = analysis_results[fname]
+        display_name = uploaded_files[fname]['display_name']
+        row = [display_name]
+        for length in range(1, 6):
+            count = result['trip_counts'][length]
+            pct = (count / result['total_trips'] * 100) if result['total_trips'] > 0 else 0
+            row.append(f"{count}\n({pct:.1f}%)")
+        row.append(f"{result['total_trips']}\n(100%)")
+        data.append(row)
+    create_table(data, "1. Trip Length Distribution")
+    
+    # 2. Single Leg on Last Day
+    data = [['File', '1-day', '2-day', '3-day', '4-day', '5-day', 'Overall']]
+    for fname in sorted_files:
+        result = analysis_results[fname]
+        display_name = uploaded_files[fname]['display_name']
+        row = [display_name]
+        for length in range(1, 6):
+            total = result['trip_counts'][length]
+            single_count = int(total * result['single_leg_pct'][length] / 100)
+            pct = result['single_leg_pct'][length]
+            row.append(f"{single_count}\n({pct:.1f}%)")
+        total_single = sum(result['trip_counts'][i] * result['single_leg_pct'][i] / 100 for i in range(1, 6))
+        overall_pct = (total_single / result['total_trips'] * 100) if result['total_trips'] > 0 else 0
+        overall_count = int(total_single)
+        row.append(f"{overall_count}\n({overall_pct:.1f}%)")
+        data.append(row)
+    create_table(data, "2. Single Leg on Last Day")
+    
+    # 3. Average Credit per Trip
+    data = [['File', '1-day', '2-day', '3-day', '4-day', '5-day', 'Overall']]
+    for fname in sorted_files:
+        result = analysis_results[fname]
+        display_name = uploaded_files[fname]['display_name']
+        row = [display_name]
+        for length in range(1, 6):
+            row.append(f"{result['avg_credit_by_length'][length]:.2f}\nhrs")
+        row.append(f"{result['avg_credit_per_trip']:.2f}\nhrs")
+        data.append(row)
+    create_table(data, "3. Average Credit per Trip")
+    
+    # 4. Average Credit per Day
+    data = [['File', '1-day', '2-day', '3-day', '4-day', '5-day', 'Overall']]
+    for fname in sorted_files:
+        result = analysis_results[fname]
+        display_name = uploaded_files[fname]['display_name']
+        row = [display_name]
+        for length in range(1, 6):
+            row.append(f"{result['avg_credit_per_day_by_length'][length]:.2f}\nhrs/day")
+        row.append(f"{result['avg_credit_per_day']:.2f}\nhrs/day")
+        data.append(row)
+    create_table(data, "4. Average Credit per Day")
+    
+    # 5. Commutability - Front End
+    data = [['File', '1-day', '2-day', '3-day', '4-day', '5-day', 'Overall']]
+    for fname in sorted_files:
+        result = analysis_results[fname]
+        display_name = uploaded_files[fname]['display_name']
+        row = [display_name]
+        for length in range(1, 6):
+            total = result['trip_counts'][length]
+            commute_count = int(total * result['front_commute_pct'][length] / 100)
+            pct = result['front_commute_pct'][length]
+            row.append(f"{commute_count}\n({pct:.1f}%)")
+        total_commute = sum(result['trip_counts'][i] * result['front_commute_pct'][i] / 100 for i in range(1, 6))
+        overall_count = int(total_commute)
+        row.append(f"{overall_count}\n({result['front_commute_rate']:.1f}%)")
+        data.append(row)
+    create_table(data, "5a. Front-End Commutability")
+    
+    # 5b. Commutability - Back End
+    data = [['File', '1-day', '2-day', '3-day', '4-day', '5-day', 'Overall']]
+    for fname in sorted_files:
+        result = analysis_results[fname]
+        display_name = uploaded_files[fname]['display_name']
+        row = [display_name]
+        for length in range(1, 6):
+            total = result['trip_counts'][length]
+            commute_count = int(total * result['back_commute_pct'][length] / 100)
+            pct = result['back_commute_pct'][length]
+            row.append(f"{commute_count}\n({pct:.1f}%)")
+        total_commute = sum(result['trip_counts'][i] * result['back_commute_pct'][i] / 100 for i in range(1, 6))
+        overall_count = int(total_commute)
+        row.append(f"{overall_count}\n({result['back_commute_rate']:.1f}%)")
+        data.append(row)
+    create_table(data, "5b. Back-End Commutability")
+    
+    # 5c. Commutability - Both Ends
+    data = [['File', '1-day', '2-day', '3-day', '4-day', '5-day', 'Overall']]
+    for fname in sorted_files:
+        result = analysis_results[fname]
+        display_name = uploaded_files[fname]['display_name']
+        row = [display_name]
+        for length in range(1, 6):
+            total = result['trip_counts'][length]
+            commute_count = int(total * result['both_commute_pct'][length] / 100)
+            pct = result['both_commute_pct'][length]
+            row.append(f"{commute_count}\n({pct:.1f}%)")
+        total_commute = sum(result['trip_counts'][i] * result['both_commute_pct'][i] / 100 for i in range(1, 6))
+        overall_count = int(total_commute)
+        row.append(f"{overall_count}\n({result['both_commute_rate']:.1f}%)")
+        data.append(row)
+    create_table(data, "5c. Both Ends Commutability")
+    
+    # Add page break before graphs if multiple files
+    if num_files >= 2:
         story.append(PageBreak())
+        
+        # PAGE 2+: TREND GRAPHS
+        story.append(Paragraph("<b>Trend Analysis</b>", title_style))
+        story.append(Spacer(1, 0.2*inch))
+        
+        # Import matplotlib for graphs
+        import matplotlib.pyplot as plt
+        import matplotlib
+        matplotlib.use('Agg')
+        from io import BytesIO as ImgBuffer
+        from reportlab.platypus import Image
+        
+        # Prepare data for graphs
+        file_labels = [uploaded_files[f]['display_name'] for f in sorted_files]
+        
+        # Graph 1: Trip Length Distribution (by percentage)
+        fig, ax = plt.subplots(figsize=(10, 4))
+        x = range(len(file_labels))
+        width = 0.15
+        
+        for i, length in enumerate(range(1, 6)):
+            percentages = []
+            for fname in sorted_files:
+                result = analysis_results[fname]
+                pct = (result['trip_counts'][length] / result['total_trips'] * 100) if result['total_trips'] > 0 else 0
+                percentages.append(pct)
+            ax.bar([xi + width*i for xi in x], percentages, width, label=f'{length}-day')
+        
+        ax.set_xlabel('Month')
+        ax.set_ylabel('Percentage (%)')
+        ax.set_title('Trip Length Distribution Over Time')
+        ax.set_xticks([xi + width*2 for xi in x])
+        ax.set_xticklabels(file_labels, rotation=45, ha='right')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        
+        img_buffer = ImgBuffer()
+        plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
+        img_buffer.seek(0)
+        story.append(Image(img_buffer, width=7*inch, height=2.8*inch))
+        plt.close()
+        story.append(Spacer(1, 0.2*inch))
+        
+        # Graph 2: Average Credit per Trip
+        fig, ax = plt.subplots(figsize=(10, 4))
+        for length in range(1, 6):
+            credits = [analysis_results[f]['avg_credit_by_length'][length] for f in sorted_files]
+            ax.plot(file_labels, credits, marker='o', label=f'{length}-day', linewidth=2)
+        
+        ax.set_xlabel('Month')
+        ax.set_ylabel('Average Credit (hours)')
+        ax.set_title('Average Credit per Trip Over Time')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        
+        img_buffer = ImgBuffer()
+        plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
+        img_buffer.seek(0)
+        story.append(Image(img_buffer, width=7*inch, height=2.8*inch))
+        plt.close()
+        story.append(Spacer(1, 0.2*inch))
+        
+        # Graph 3: Commutability Trends
+        fig, ax = plt.subplots(figsize=(10, 4))
+        
+        front_rates = [analysis_results[f]['front_commute_rate'] for f in sorted_files]
+        back_rates = [analysis_results[f]['back_commute_rate'] for f in sorted_files]
+        both_rates = [analysis_results[f]['both_commute_rate'] for f in sorted_files]
+        
+        ax.plot(file_labels, front_rates, marker='o', label='Front-End', linewidth=2)
+        ax.plot(file_labels, back_rates, marker='s', label='Back-End', linewidth=2)
+        ax.plot(file_labels, both_rates, marker='^', label='Both Ends', linewidth=2)
+        
+        ax.set_xlabel('Month')
+        ax.set_ylabel('Commutability (%)')
+        ax.set_title('Commutability Trends Over Time')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        
+        img_buffer = ImgBuffer()
+        plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
+        img_buffer.seek(0)
+        story.append(Image(img_buffer, width=7*inch, height=2.8*inch))
+        plt.close()
+        
+        # Page 3 if needed
+        story.append(PageBreak())
+        
+        # Graph 4: Average Credit per Day
+        fig, ax = plt.subplots(figsize=(10, 4))
+        for length in range(1, 6):
+            credits = [analysis_results[f]['avg_credit_per_day_by_length'][length] for f in sorted_files]
+            ax.plot(file_labels, credits, marker='o', label=f'{length}-day', linewidth=2)
+        
+        ax.set_xlabel('Month')
+        ax.set_ylabel('Average Credit per Day (hrs/day)')
+        ax.set_title('Average Credit per Day Over Time')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        
+        img_buffer = ImgBuffer()
+        plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
+        img_buffer.seek(0)
+        story.append(Image(img_buffer, width=7*inch, height=2.8*inch))
+        plt.close()
+        story.append(Spacer(1, 0.2*inch))
+        
+        # Graph 5: Single Leg Last Day Trends
+        fig, ax = plt.subplots(figsize=(10, 4))
+        for length in range(1, 6):
+            percentages = [analysis_results[f]['single_leg_pct'][length] for f in sorted_files]
+            ax.plot(file_labels, percentages, marker='o', label=f'{length}-day', linewidth=2)
+        
+        ax.set_xlabel('Month')
+        ax.set_ylabel('Single Leg Last Day (%)')
+        ax.set_title('Single Leg on Last Day Trends Over Time')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        
+        img_buffer = ImgBuffer()
+        plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
+        img_buffer.seek(0)
+        story.append(Image(img_buffer, width=7*inch, height=2.8*inch))
+        plt.close()
     
     doc.build(story)
     pdf_bytes = buffer.getvalue()
