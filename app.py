@@ -146,7 +146,7 @@ with col1:
                                 'content': content,
                                 'month': month,
                                 'year': year,
-                                'display_name': f"{month} {year} - {base_name}",
+                                'display_name': f"{month} {year}",
                                 'original_name': uploaded_file.name
                             }
                             st.session_state.file_counter += 1
