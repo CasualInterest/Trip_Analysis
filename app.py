@@ -94,15 +94,16 @@ with col1:
                 content = uploaded_file.read().decode('utf-8')
                 file_hash = get_file_hash(content)
                 
-                # Check if this exact file (by content) is already uploaded
+                # Check if this exact file content is already uploaded
                 already_exists = False
                 for existing_name, existing_data in st.session_state.uploaded_files.items():
                     if get_file_hash(existing_data['content']) == file_hash:
                         already_exists = True
-                        st.warning(f"⚠️ File '{uploaded_file.name}' already uploaded as '{existing_name}'")
+                        st.warning(f"⚠️ File '{uploaded_file.name}' (same content) already uploaded as '{existing_name}'")
                         break
                 
-                if not already_exists and uploaded_file.name not in st.session_state.uploaded_files:
+                # Also check if there's a pending form for this exact content
+                if not already_exists:
                     # Show date selection form
                     with st.form(key=f'date_form_{file_hash}'):
                         st.subheader(f"📅 Set Date for: {uploaded_file.name}")
@@ -126,15 +127,30 @@ with col1:
                         submitted = st.form_submit_button("✅ Add File")
                         
                         if submitted:
-                            # Add to uploaded files
-                            st.session_state.uploaded_files[uploaded_file.name] = {
+                            # Create unique filename based on date and original name
+                            # Extract base name without extension
+                            base_name = uploaded_file.name.rsplit('.', 1)[0] if '.' in uploaded_file.name else uploaded_file.name
+                            extension = uploaded_file.name.rsplit('.', 1)[1] if '.' in uploaded_file.name else 'txt'
+                            
+                            # Create new filename: basename_MMYYYY.ext
+                            month_num = {
+                                'January': '01', 'February': '02', 'March': '03', 'April': '04',
+                                'May': '05', 'June': '06', 'July': '07', 'August': '08',
+                                'September': '09', 'October': '10', 'November': '11', 'December': '12'
+                            }[month]
+                            
+                            new_filename = f"{base_name}_{month_num}{year}.{extension}"
+                            
+                            # Add to uploaded files with new filename
+                            st.session_state.uploaded_files[new_filename] = {
                                 'content': content,
                                 'month': month,
                                 'year': year,
-                                'display_name': f"{month} {year} - {uploaded_file.name}"
+                                'display_name': f"{month} {year} - {base_name}",
+                                'original_name': uploaded_file.name
                             }
                             st.session_state.file_counter += 1
-                            st.success(f"✅ Added {uploaded_file.name}")
+                            st.success(f"✅ Added '{uploaded_file.name}' as '{new_filename}'")
                             st.rerun()
     else:
         st.info("Maximum of 12 files reached. Remove files to add more.")
