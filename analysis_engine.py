@@ -301,11 +301,12 @@ def calculate_credit_for_section(trip_lines):
     return max(total_blk, min_daily_credit)
 
 def get_trip_number(trip_lines):
-    """Extract trip number from trip header"""
+    """Extract trip number from trip header - can be numeric or alphanumeric (e.g., 4527 or L832)"""
     for line in trip_lines:
         if line.strip().startswith('#'):
-            # Extract number after #
-            match = re.search(r'#(\d+)', line)
+            # Extract trip number after # - can include letters
+            # Pattern: #L832 or #4527
+            match = re.search(r'#([A-Z]?\d+)', line)
             if match:
                 return match.group(1)
     return None
