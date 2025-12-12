@@ -219,85 +219,269 @@ if st.session_state.analysis_results:
     st.header("📊 Analysis Results")
     
     if len(st.session_state.analysis_results) == 1:
-        # Single file - show detailed analysis
+        # Single file - show summary or detailed view based on toggle
         fname = list(st.session_state.analysis_results.keys())[0]
         result = st.session_state.analysis_results[fname]
         fdata = st.session_state.uploaded_files[fname]
         
         st.subheader(f"Analysis: {fdata['display_name']}")
         
-        # Summary metrics
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total Trips", result['total_trips'])
-        with col2:
-            st.metric("Avg Trip Length", f"{result['avg_trip_length']:.2f} days")
-        with col3:
-            st.metric("Avg Credit/Trip", f"{result['avg_credit_per_trip']:.2f} hrs")
-        with col4:
-            st.metric("Avg Credit/Day", f"{result['avg_credit_per_day']:.2f} hrs")
+        # View toggle
+        view_mode = st.radio(
+            "View Mode",
+            ["Summary", "Detailed Trip Table"],
+            horizontal=True,
+            key='view_mode_toggle'
+        )
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Front-End Commute", f"{result['front_commute_rate']:.1f}%")
-        with col2:
-            st.metric("Back-End Commute", f"{result['back_commute_rate']:.1f}%")
-        with col3:
-            st.metric("Both Ends Commute", f"{result['both_commute_rate']:.1f}%")
+        if view_mode == "Summary":
+            # SUMMARY VIEW (existing code)
+            # Summary metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Trips", result['total_trips'])
+            with col2:
+                st.metric("Avg Trip Length", f"{result['avg_trip_length']:.2f} days")
+            with col3:
+                st.metric("Avg Credit/Trip", f"{result['avg_credit_per_trip']:.2f} hrs")
+            with col4:
+                st.metric("Avg Credit/Day", f"{result['avg_credit_per_day']:.2f} hrs")
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Front-End Commute", f"{result['front_commute_rate']:.1f}%")
+            with col2:
+                st.metric("Back-End Commute", f"{result['back_commute_rate']:.1f}%")
+            with col3:
+                st.metric("Both Ends Commute", f"{result['both_commute_rate']:.1f}%")
+            
+            # Charts in tabs
+            tab1, tab2, tab3, tab4, tab5 = st.tabs([
+                "Trip Length", "Single Leg Last Day", "Credit/Trip", 
+                "Credit/Day", "Commutability"
+            ])
+            
+            with tab1:
+                fig = px.bar(
+                    x=[f"{i}-day" for i in range(1, 6)],
+                    y=[result['trip_counts'][i] for i in range(1, 6)],
+                    labels={'x': 'Trip Length', 'y': 'Number of Trips'},
+                    title='Trip Length Distribution'
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with tab2:
+                data = pd.DataFrame({
+                    'Length': [f"{i}-day" for i in range(1, 6)],
+                    'Percentage': [result['single_leg_pct'][i] for i in range(1, 6)]
+                })
+                fig = px.bar(data, x='Length', y='Percentage',
+                            title='Trips with Single Leg on Last Day (%)')
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with tab3:
+                data = pd.DataFrame({
+                    'Length': [f"{i}-day" for i in range(1, 6)],
+                    'Hours': [result['avg_credit_by_length'][i] for i in range(1, 6)]
+                })
+                fig = px.bar(data, x='Length', y='Hours',
+                            title='Average Credit Hours per Trip')
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with tab4:
+                data = pd.DataFrame({
+                    'Length': [f"{i}-day" for i in range(1, 6)],
+                    'Hours/Day': [result['avg_credit_per_day_by_length'][i] for i in range(1, 6)]
+                })
+                fig = px.bar(data, x='Length', y='Hours/Day',
+                            title='Average Credit Hours per Day')
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with tab5:
+                data = pd.DataFrame({
+                    'Length': [f"{i}-day" for i in range(1, 6)] * 3,
+                    'Percentage': [result['front_commute_pct'][i] for i in range(1, 6)] +
+                                 [result['back_commute_pct'][i] for i in range(1, 6)] +
+                                 [result['both_commute_pct'][i] for i in range(1, 6)],
+                    'Type': ['Front End']*5 + ['Back End']*5 + ['Both Ends']*5
+                })
+                fig = px.bar(data, x='Length', y='Percentage', color='Type',
+                            barmode='group', title='Commutability by Trip Length (%)')
+                st.plotly_chart(fig, use_container_width=True)
         
-        # Charts in tabs
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
-            "Trip Length", "Single Leg Last Day", "Credit/Trip", 
-            "Credit/Day", "Commutability"
-        ])
-        
-        with tab1:
-            fig = px.bar(
-                x=[f"{i}-day" for i in range(1, 6)],
-                y=[result['trip_counts'][i] for i in range(1, 6)],
-                labels={'x': 'Trip Length', 'y': 'Number of Trips'},
-                title='Trip Length Distribution'
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with tab2:
-            data = pd.DataFrame({
-                'Length': [f"{i}-day" for i in range(1, 6)],
-                'Percentage': [result['single_leg_pct'][i] for i in range(1, 6)]
-            })
-            fig = px.bar(data, x='Length', y='Percentage',
-                        title='Trips with Single Leg on Last Day (%)')
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with tab3:
-            data = pd.DataFrame({
-                'Length': [f"{i}-day" for i in range(1, 6)],
-                'Hours': [result['avg_credit_by_length'][i] for i in range(1, 6)]
-            })
-            fig = px.bar(data, x='Length', y='Hours',
-                        title='Average Credit Hours per Trip')
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with tab4:
-            data = pd.DataFrame({
-                'Length': [f"{i}-day" for i in range(1, 6)],
-                'Hours/Day': [result['avg_credit_per_day_by_length'][i] for i in range(1, 6)]
-            })
-            fig = px.bar(data, x='Length', y='Hours/Day',
-                        title='Average Credit Hours per Day')
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with tab5:
-            data = pd.DataFrame({
-                'Length': [f"{i}-day" for i in range(1, 6)] * 3,
-                'Percentage': [result['front_commute_pct'][i] for i in range(1, 6)] +
-                             [result['back_commute_pct'][i] for i in range(1, 6)] +
-                             [result['both_commute_pct'][i] for i in range(1, 6)],
-                'Type': ['Front End']*5 + ['Back End']*5 + ['Both Ends']*5
-            })
-            fig = px.bar(data, x='Length', y='Percentage', color='Type',
-                        barmode='group', title='Commutability by Trip Length (%)')
-            st.plotly_chart(fig, use_container_width=True)
+        else:
+            # DETAILED TRIP TABLE VIEW
+            # Get detailed trip data
+            if 'detailed_trips' not in st.session_state:
+                st.session_state.detailed_trips = {}
+            
+            if fname not in st.session_state.detailed_trips:
+                with st.spinner("Loading detailed trip data..."):
+                    detailed_trips = analysis_engine.get_detailed_trips(
+                        fdata['content'],
+                        selected_base
+                    )
+                    st.session_state.detailed_trips[fname] = detailed_trips
+            
+            trips = st.session_state.detailed_trips[fname]
+            
+            # Initialize filter state
+            if 'trip_filters' not in st.session_state:
+                st.session_state.trip_filters = {
+                    'trip_length': 'All',
+                    'report_start': '00:00',
+                    'report_end': '23:30',
+                    'release_start': '00:00',
+                    'release_end': '23:30',
+                    'search_term': '',
+                    'sort_column': None,
+                    'sort_ascending': True
+                }
+            
+            # Filters section
+            st.markdown("### Filters")
+            
+            # Create filter columns
+            filter_col1, filter_col2, filter_col3, filter_col4, filter_col5 = st.columns([1, 1.5, 1.5, 1, 0.5])
+            
+            with filter_col1:
+                trip_length_filter = st.selectbox(
+                    "Trip Length",
+                    ['All', '1-day', '2-day', '3-day', '4-day', '5-day'],
+                    key='filter_trip_length'
+                )
+            
+            with filter_col2:
+                time_options = [f"{h:02d}:{m:02d}" for h in range(24) for m in [0, 30]]
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    report_start = st.selectbox("Report Start", time_options, index=0, key='filter_report_start')
+                with col_b:
+                    report_end = st.selectbox("Report End", time_options, index=len(time_options)-1, key='filter_report_end')
+            
+            with filter_col3:
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    release_start = st.selectbox("Release Start", time_options, index=0, key='filter_release_start')
+                with col_b:
+                    release_end = st.selectbox("Release End", time_options, index=len(time_options)-1, key='filter_release_end')
+            
+            with filter_col4:
+                search_term = st.text_input("Search Trip #", key='filter_search', placeholder="e.g., 44")
+            
+            with filter_col5:
+                st.write("")  # Spacer
+                st.write("")  # Spacer
+                if st.button("🔄 Clear", key='clear_filters'):
+                    st.session_state.trip_filters = {
+                        'trip_length': 'All',
+                        'report_start': '00:00',
+                        'report_end': '23:30',
+                        'release_start': '00:00',
+                        'release_end': '23:30',
+                        'search_term': '',
+                        'sort_column': None,
+                        'sort_ascending': True
+                    }
+                    st.rerun()
+            
+            # Apply filters
+            filtered_trips = trips.copy()
+            
+            # Trip length filter
+            if trip_length_filter != 'All':
+                length = int(trip_length_filter.split('-')[0])
+                filtered_trips = [t for t in filtered_trips if t['length'] == length]
+            
+            # Report time filter
+            def time_to_minutes(time_str):
+                h, m = map(int, time_str.split(':'))
+                return h * 60 + m
+            
+            report_start_min = time_to_minutes(report_start)
+            report_end_min = time_to_minutes(report_end)
+            filtered_trips = [t for t in filtered_trips 
+                            if t['report_time_minutes'] is not None 
+                            and report_start_min <= t['report_time_minutes'] <= report_end_min]
+            
+            # Release time filter
+            release_start_min = time_to_minutes(release_start)
+            release_end_min = time_to_minutes(release_end)
+            filtered_trips = [t for t in filtered_trips 
+                            if t['release_time_minutes'] is not None 
+                            and release_start_min <= t['release_time_minutes'] <= release_end_min]
+            
+            # Search filter
+            if search_term:
+                filtered_trips = [t for t in filtered_trips 
+                                if t['trip_number'] and search_term in t['trip_number']]
+            
+            # Display trip count
+            st.markdown(f"**Showing {len(filtered_trips)} trips**")
+            
+            # Create dataframe for display
+            if filtered_trips:
+                df_data = []
+                for i, trip in enumerate(filtered_trips):
+                    df_data.append({
+                        'index': i,
+                        'Trip #': trip['trip_number'] or 'N/A',
+                        'Base': trip['base'],
+                        'Length': f"{trip['length']}-day",
+                        'Report': trip['report_time'] or 'N/A',
+                        'Release': trip['release_time'] or 'N/A',
+                        'Total Legs': trip['total_legs'],
+                        'Longest Leg (min)': trip['longest_leg'],
+                        'Shortest Leg (min)': trip['shortest_leg'],
+                        'Total Credit': f"{trip['total_credit']:.2f}" if trip['total_credit'] else 'N/A',
+                        'Total Pay': f"{trip['total_pay']:.2f}" if trip['total_pay'] else 'N/A'
+                    })
+                
+                df = pd.DataFrame(df_data)
+                
+                # Column configuration for interactive table
+                column_config = {
+                    'index': None,  # Hide index column
+                    'Trip #': st.column_config.TextColumn('Trip #', width='small'),
+                    'Base': st.column_config.TextColumn('Base', width='small'),
+                    'Length': st.column_config.TextColumn('Length', width='small'),
+                    'Report': st.column_config.TextColumn('Report', width='small'),
+                    'Release': st.column_config.TextColumn('Release', width='small'),
+                    'Total Legs': st.column_config.NumberColumn('Legs', width='small'),
+                    'Longest Leg (min)': st.column_config.NumberColumn('Longest Leg', width='small'),
+                    'Shortest Leg (min)': st.column_config.NumberColumn('Shortest Leg', width='small'),
+                    'Total Credit': st.column_config.TextColumn('Credit', width='small'),
+                    'Total Pay': st.column_config.TextColumn('Pay', width='small')
+                }
+                
+                # Display table with selection
+                selected = st.dataframe(
+                    df,
+                    column_config=column_config,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=600
+                )
+                
+                # Expandable trip details
+                st.markdown("---")
+                st.markdown("### Trip Details")
+                st.markdown("*Select a trip number above to view raw trip details*")
+                
+                # Trip selection via text input for now (expandable rows not directly supported)
+                selected_trip_num = st.text_input("Enter Trip # to view details:", key='selected_trip_detail')
+                
+                if selected_trip_num:
+                    # Find the trip
+                    matching_trips = [t for t in filtered_trips if t['trip_number'] == selected_trip_num]
+                    if matching_trips:
+                        trip_detail = matching_trips[0]
+                        with st.expander(f"Trip #{selected_trip_num} - Full Details", expanded=True):
+                            st.code(trip_detail['raw_text'], language=None)
+                    else:
+                        st.warning(f"Trip #{selected_trip_num} not found in filtered results.")
+            else:
+                st.info("No trips match the current filters.")
     
     else:
         # Multiple files - show detailed comparison tables

@@ -133,6 +133,119 @@ def get_effective_dates(trip_lines):
     
     return days_of_week, start_date, end_date, occurrences
 
+def get_trip_number(trip_lines):
+    """Extract trip number from trip header"""
+    for line in trip_lines:
+        if line.strip().startswith('#'):
+            # Extract number after #
+            match = re.search(r'#(\d+)', line)
+            if match:
+                return match.group(1)
+    return None
+
+def get_total_pay(trip_lines):
+    """Extract TOTAL PAY value"""
+    for line in trip_lines:
+        if 'TOTAL PAY' in line:
+            parts = line.split()
+            for i, part in enumerate(parts):
+                if part == 'PAY' and i + 1 < len(parts):
+                    pay_str = parts[i + 1]
+                    if pay_str.endswith('TL'):
+                        try:
+                            return float(pay_str[:-2])
+                        except ValueError:
+                            pass
+    return None
+
+def get_flight_block_times(trip_lines):
+    """Extract all flight block times (BLK column)"""
+    block_times = []
+    
+    for line in trip_lines:
+        if len(line) < 10:
+            continue
+        
+        # Look for BLK. column pattern - time followed by decimal
+        # Pattern: number.number (e.g., "4.57", "2.18")
+        parts = line.split()
+        for i, part in enumerate(parts):
+            # Check if this looks like a block time (X.XX format)
+            if '.' in part and i + 1 < len(parts):
+                try:
+                    # Try to parse as float
+                    block_time = float(part)
+                    # Also check if next part might be a turn time (also has decimal)
+                    # Block times are typically between 0.5 and 15 hours
+                    if 0.1 <= block_time <= 15.0:
+                        # Convert to minutes for easier comparison
+                        block_minutes = int(block_time * 60)
+                        block_times.append(block_minutes)
+                except ValueError:
+                    continue
+    
+    return block_times
+
+def extract_detailed_trip_info(trip_lines):
+    """
+    Extract all information needed for detailed trip table view
+    Returns dict with trip details
+    """
+    trip_number = get_trip_number(trip_lines)
+    first_airport = get_first_departure_airport(trip_lines)
+    base = BASE_MAPPING.get(first_airport, 'UNKNOWN') if first_airport else 'UNKNOWN'
+    
+    # Get trip length and flight legs
+    length, last_day_legs, flight_legs = determine_trip_length_with_details(trip_lines)
+    
+    # Calculate report and release times
+    report_time_minutes = None
+    release_time_minutes = None
+    if flight_legs:
+        first_dep_time = flight_legs[0][1]
+        last_arr_time = flight_legs[-1][3]
+        report_time_minutes = calculate_report_time(first_dep_time)
+        release_time_minutes = calculate_release_time(last_arr_time)
+    
+    # Convert minutes to HH:MM format for display
+    def minutes_to_time(minutes):
+        if minutes is None:
+            return None
+        hours = minutes // 60
+        mins = minutes % 60
+        return f"{hours:02d}:{mins:02d}"
+    
+    report_time_str = minutes_to_time(report_time_minutes)
+    release_time_str = minutes_to_time(release_time_minutes)
+    
+    # Get total credit and pay
+    total_credit = get_total_credit(trip_lines)
+    total_pay = get_total_pay(trip_lines)
+    
+    # Get block times for longest/shortest leg
+    block_times = get_flight_block_times(trip_lines)
+    longest_leg = max(block_times) if block_times else 0
+    shortest_leg = min(block_times) if block_times else 0
+    
+    # Get raw trip text
+    raw_text = '\n'.join(trip_lines)
+    
+    return {
+        'trip_number': trip_number,
+        'base': base,
+        'length': length,
+        'report_time': report_time_str,
+        'report_time_minutes': report_time_minutes,  # For filtering
+        'release_time': release_time_str,
+        'release_time_minutes': release_time_minutes,  # For filtering
+        'total_legs': len(flight_legs),
+        'longest_leg': longest_leg,
+        'shortest_leg': shortest_leg,
+        'total_credit': total_credit,
+        'total_pay': total_pay,
+        'raw_text': raw_text
+    }
+
 def get_first_departure_airport(trip_lines):
     """Get the departure airport of the first flight"""
     for line in trip_lines:
@@ -380,6 +493,37 @@ def analyze_file(file_content, base_filter, front_commute_minutes, back_commute_
     result['both_commute_rate'] = sum(commute_both.values()) / total_trips * 100 if total_trips > 0 else 0
     
     return result
+
+def get_detailed_trips(file_content, base_filter):
+    """
+    Extract detailed information for all trips in a file
+    Returns list of trip detail dicts
+    """
+    trips = parse_trips(file_content)
+    detailed_trips = []
+    
+    for trip in trips:
+        first_airport = get_first_departure_airport(trip)
+        if not first_airport:
+            continue
+        
+        # Apply base filter
+        base = BASE_MAPPING.get(first_airport, 'UNKNOWN')
+        if base_filter != "All Bases" and base != base_filter:
+            continue
+        
+        # Get occurrences for this trip
+        days_of_week, start, end, occurrences = get_effective_dates(trip)
+        
+        # Extract detailed info
+        trip_info = extract_detailed_trip_info(trip)
+        trip_info['occurrences'] = occurrences
+        
+        # Add one entry per occurrence
+        for _ in range(occurrences):
+            detailed_trips.append(trip_info.copy())
+    
+    return detailed_trips
 
 def generate_pdf_report(analysis_results, uploaded_files, base_filter, front_time, back_time):
     """Generate PDF report with tables on page 1 and trend graphs on page 2+"""
