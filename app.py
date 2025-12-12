@@ -445,7 +445,8 @@ if st.session_state.analysis_results:
                         'Longest': trip['longest_leg'],
                         'Shortest': trip['shortest_leg'],
                         'Credit': f"{trip['total_credit']:.2f}" if trip['total_credit'] else 'N/A',
-                        'Pay': f"{trip['total_pay']:.2f}" if trip['total_pay'] else 'N/A'
+                        'Pay': f"{trip['total_pay']:.2f}" if trip['total_pay'] else 'N/A',
+                        'Occurs': trip['occurrences']
                     })
                 
                 df = pd.DataFrame(df_data)
@@ -469,9 +470,10 @@ if st.session_state.analysis_results:
                         'Longest': st.column_config.TextColumn('Longest', width='small'),
                         'Shortest': st.column_config.TextColumn('Shortest', width='small'),
                         'Credit': st.column_config.TextColumn('Credit', width='small'),
-                        'Pay': st.column_config.TextColumn('Pay', width='small')
+                        'Pay': st.column_config.TextColumn('Pay', width='small'),
+                        'Occurs': st.column_config.NumberColumn('Occurs', width='small', help='Number of times this trip operates')
                     },
-                    disabled=['Trip #', 'Base', 'Length', 'Report', 'Release', 'Legs', 'Longest', 'Shortest', 'Credit', 'Pay'],
+                    disabled=['Trip #', 'Base', 'Length', 'Report', 'Release', 'Legs', 'Longest', 'Shortest', 'Credit', 'Pay', 'Occurs'],
                     hide_index=True,
                     use_container_width=True,
                     height=600

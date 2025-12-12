@@ -677,7 +677,7 @@ def get_detailed_trips(file_content, base_filter, bid_month):
     """
     Extract detailed information for all trips in a file
     Handles split trips (when EFFECTIVE contains previous month)
-    Returns list of trip detail dicts
+    Returns list of unique trip detail dicts with occurrence counts
     """
     trips = parse_trips(file_content)
     detailed_trips = []
@@ -718,9 +718,8 @@ def get_detailed_trips(file_content, base_filter, bid_month):
                 section2_occurrences = max(total_occurrences - 1, 0)
                 trip_info2['occurrences'] = section2_occurrences
                 
-                # Add section 2 entries
-                for _ in range(section2_occurrences):
-                    detailed_trips.append(trip_info2.copy())
+                # Add section 2 as single entry with occurrence count
+                detailed_trips.append(trip_info2)
         else:
             # Normal trip (not split)
             # Get occurrences for this trip
@@ -730,9 +729,8 @@ def get_detailed_trips(file_content, base_filter, bid_month):
             trip_info = extract_detailed_trip_info(trip)
             trip_info['occurrences'] = occurrences
             
-            # Add one entry per occurrence
-            for _ in range(occurrences):
-                detailed_trips.append(trip_info.copy())
+            # Add as single entry with occurrence count
+            detailed_trips.append(trip_info)
     
     return detailed_trips
 
