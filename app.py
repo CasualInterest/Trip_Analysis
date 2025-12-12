@@ -200,20 +200,18 @@ if st.session_state.analysis_results:
         with col4:
             st.metric("Avg Credit/Day", f"{result['avg_credit_per_day']:.2f} hrs")
         
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Red-Eye Rate", f"{result['redeye_rate']:.1f}%")
-        with col2:
             st.metric("Front-End Commute", f"{result['front_commute_rate']:.1f}%")
-        with col3:
+        with col2:
             st.metric("Back-End Commute", f"{result['back_commute_rate']:.1f}%")
-        with col4:
+        with col3:
             st.metric("Both Ends Commute", f"{result['both_commute_rate']:.1f}%")
         
         # Charts in tabs
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
             "Trip Length", "Single Leg Last Day", "Credit/Trip", 
-            "Credit/Day", "Red-Eyes", "Commutability"
+            "Credit/Day", "Commutability"
         ])
         
         with tab1:
@@ -254,15 +252,6 @@ if st.session_state.analysis_results:
         
         with tab5:
             data = pd.DataFrame({
-                'Length': [f"{i}-day" for i in range(1, 6)],
-                'Percentage': [result['redeye_pct'][i] for i in range(1, 6)]
-            })
-            fig = px.bar(data, x='Length', y='Percentage',
-                        title='Red-Eye Rate by Trip Length (%)')
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with tab6:
-            data = pd.DataFrame({
                 'Length': [f"{i}-day" for i in range(1, 6)] * 3,
                 'Percentage': [result['front_commute_pct'][i] for i in range(1, 6)] +
                              [result['back_commute_pct'][i] for i in range(1, 6)] +
@@ -277,12 +266,29 @@ if st.session_state.analysis_results:
         # Multiple files - show detailed comparison tables
         st.subheader("📈 Detailed Comparison Analysis")
         
-        file_names = list(st.session_state.analysis_results.keys())
+        # Sort files by date (month/year)
+        month_order = {
+            'January': 1, 'February': 2, 'March': 3, 'April': 4,
+            'May': 5, 'June': 6, 'July': 7, 'August': 8,
+            'September': 9, 'October': 10, 'November': 11, 'December': 12
+        }
+        
+        sorted_files = sorted(
+            st.session_state.analysis_results.keys(),
+            key=lambda f: (
+                st.session_state.uploaded_files[f]['year'],
+                month_order[st.session_state.uploaded_files[f]['month']]
+            )
+        )
+        
+        num_files = len(sorted_files)
+        show_differences = (num_files == 2)
         
         # 1. TRIP LENGTH DISTRIBUTION
         st.markdown("### 1️⃣ Trip Length Distribution")
         trip_dist_data = []
-        for fname, result in st.session_state.analysis_results.items():
+        for fname in sorted_files:
+            result = st.session_state.analysis_results[fname]
             display_name = st.session_state.uploaded_files[fname]['display_name']
             row = {'File': display_name}
             for length in range(1, 6):
@@ -293,12 +299,12 @@ if st.session_state.analysis_results:
             trip_dist_data.append(row)
         st.dataframe(pd.DataFrame(trip_dist_data), use_container_width=True, hide_index=True)
         
-        # Show differences if exactly 2 files
-        if len(file_names) == 2:
-            st.markdown("**Differences (File 2 - File 1):**")
+        # Show differences only if exactly 2 files
+        if show_differences:
+            st.markdown("**Change (Newer - Older):**")
             diff_data = []
-            r1 = st.session_state.analysis_results[file_names[0]]
-            r2 = st.session_state.analysis_results[file_names[1]]
+            r1 = st.session_state.analysis_results[sorted_files[0]]
+            r2 = st.session_state.analysis_results[sorted_files[1]]
             row = {'Metric': 'Percentage Point Difference'}
             for length in range(1, 6):
                 pct1 = (r1['trip_counts'][length] / r1['total_trips'] * 100) if r1['total_trips'] > 0 else 0
@@ -313,24 +319,28 @@ if st.session_state.analysis_results:
         # 2. SINGLE LEG ON LAST DAY
         st.markdown("### 2️⃣ Trips with Single Leg on Last Day")
         single_leg_data = []
-        for fname, result in st.session_state.analysis_results.items():
+        for fname in sorted_files:
+            result = st.session_state.analysis_results[fname]
             display_name = st.session_state.uploaded_files[fname]['display_name']
             row = {'File': display_name}
             for length in range(1, 6):
+                total = result['trip_counts'][length]
+                single_count = int(total * result['single_leg_pct'][length] / 100)
                 pct = result['single_leg_pct'][length]
-                row[f'{length}-day'] = f"{pct:.2f}%"
+                row[f'{length}-day'] = f"{single_count} ({pct:.2f}%)"
             # Overall
             total_single = sum(result['trip_counts'][i] * result['single_leg_pct'][i] / 100 for i in range(1, 6))
             overall_pct = (total_single / result['total_trips'] * 100) if result['total_trips'] > 0 else 0
-            row['Overall'] = f"{overall_pct:.2f}%"
+            overall_count = int(total_single)
+            row['Overall'] = f"{overall_count} ({overall_pct:.2f}%)"
             single_leg_data.append(row)
         st.dataframe(pd.DataFrame(single_leg_data), use_container_width=True, hide_index=True)
         
-        if len(file_names) == 2:
-            st.markdown("**Differences (File 2 - File 1):**")
+        if show_differences:
+            st.markdown("**Change (Newer - Older):**")
             diff_data = []
-            r1 = st.session_state.analysis_results[file_names[0]]
-            r2 = st.session_state.analysis_results[file_names[1]]
+            r1 = st.session_state.analysis_results[sorted_files[0]]
+            r2 = st.session_state.analysis_results[sorted_files[1]]
             row = {'Metric': 'Percentage Point Difference'}
             for length in range(1, 6):
                 diff = r2['single_leg_pct'][length] - r1['single_leg_pct'][length]
@@ -349,7 +359,8 @@ if st.session_state.analysis_results:
         # 3. AVERAGE CREDIT PER TRIP
         st.markdown("### 3️⃣ Average Credit per Trip (hours)")
         credit_trip_data = []
-        for fname, result in st.session_state.analysis_results.items():
+        for fname in sorted_files:
+            result = st.session_state.analysis_results[fname]
             display_name = st.session_state.uploaded_files[fname]['display_name']
             row = {'File': display_name}
             for length in range(1, 6):
@@ -358,11 +369,11 @@ if st.session_state.analysis_results:
             credit_trip_data.append(row)
         st.dataframe(pd.DataFrame(credit_trip_data), use_container_width=True, hide_index=True)
         
-        if len(file_names) == 2:
-            st.markdown("**Differences (File 2 - File 1):**")
+        if show_differences:
+            st.markdown("**Change (Newer - Older):**")
             diff_data = []
-            r1 = st.session_state.analysis_results[file_names[0]]
-            r2 = st.session_state.analysis_results[file_names[1]]
+            r1 = st.session_state.analysis_results[sorted_files[0]]
+            r2 = st.session_state.analysis_results[sorted_files[1]]
             row = {'Metric': 'Hour Difference'}
             for length in range(1, 6):
                 diff = r2['avg_credit_by_length'][length] - r1['avg_credit_by_length'][length]
@@ -377,7 +388,8 @@ if st.session_state.analysis_results:
         # 4. AVERAGE CREDIT PER DAY
         st.markdown("### 4️⃣ Average Credit per Day (hours/day)")
         credit_day_data = []
-        for fname, result in st.session_state.analysis_results.items():
+        for fname in sorted_files:
+            result = st.session_state.analysis_results[fname]
             display_name = st.session_state.uploaded_files[fname]['display_name']
             row = {'File': display_name}
             for length in range(1, 6):
@@ -386,11 +398,11 @@ if st.session_state.analysis_results:
             credit_day_data.append(row)
         st.dataframe(pd.DataFrame(credit_day_data), use_container_width=True, hide_index=True)
         
-        if len(file_names) == 2:
-            st.markdown("**Differences (File 2 - File 1):**")
+        if show_differences:
+            st.markdown("**Change (Newer - Older):**")
             diff_data = []
-            r1 = st.session_state.analysis_results[file_names[0]]
-            r2 = st.session_state.analysis_results[file_names[1]]
+            r1 = st.session_state.analysis_results[sorted_files[0]]
+            r2 = st.session_state.analysis_results[sorted_files[1]]
             row = {'Metric': 'Hours/Day Difference'}
             for length in range(1, 6):
                 diff = r2['avg_credit_per_day_by_length'][length] - r1['avg_credit_per_day_by_length'][length]
@@ -402,52 +414,31 @@ if st.session_state.analysis_results:
         
         st.markdown("---")
         
-        # 5. RED-EYE FLIGHTS
-        st.markdown("### 5️⃣ Red-Eye Flights (Departs ≥2000, Arrives ≥0200)")
-        redeye_data = []
-        for fname, result in st.session_state.analysis_results.items():
-            display_name = st.session_state.uploaded_files[fname]['display_name']
-            row = {'File': display_name}
-            for length in range(1, 6):
-                row[f'{length}-day'] = f"{result['redeye_pct'][length]:.2f}%"
-            row['Overall'] = f"{result['redeye_rate']:.2f}%"
-            redeye_data.append(row)
-        st.dataframe(pd.DataFrame(redeye_data), use_container_width=True, hide_index=True)
-        
-        if len(file_names) == 2:
-            st.markdown("**Differences (File 2 - File 1):**")
-            diff_data = []
-            r1 = st.session_state.analysis_results[file_names[0]]
-            r2 = st.session_state.analysis_results[file_names[1]]
-            row = {'Metric': 'Percentage Point Difference'}
-            for length in range(1, 6):
-                diff = r2['redeye_pct'][length] - r1['redeye_pct'][length]
-                row[f'{length}-day'] = f"{diff:+.2f} points"
-            overall_diff = r2['redeye_rate'] - r1['redeye_rate']
-            row['Overall'] = f"{overall_diff:+.2f} points"
-            diff_data.append(row)
-            st.dataframe(pd.DataFrame(diff_data), use_container_width=True, hide_index=True)
-        
-        st.markdown("---")
-        
-        # 6. COMMUTABILITY
-        st.markdown("### 6️⃣ Commutability")
+        # 5. COMMUTABILITY
+        st.markdown("### 5️⃣ Commutability")
         
         st.markdown("**Front-End Commutable (Report ≥ threshold):**")
         front_data = []
-        for fname, result in st.session_state.analysis_results.items():
+        for fname in sorted_files:
+            result = st.session_state.analysis_results[fname]
             display_name = st.session_state.uploaded_files[fname]['display_name']
             row = {'File': display_name}
             for length in range(1, 6):
-                row[f'{length}-day'] = f"{result['front_commute_pct'][length]:.2f}%"
-            row['Overall'] = f"{result['front_commute_rate']:.2f}%"
+                total = result['trip_counts'][length]
+                commute_count = int(total * result['front_commute_pct'][length] / 100)
+                pct = result['front_commute_pct'][length]
+                row[f'{length}-day'] = f"{commute_count} ({pct:.2f}%)"
+            # Overall
+            total_commute = sum(result['trip_counts'][i] * result['front_commute_pct'][i] / 100 for i in range(1, 6))
+            overall_count = int(total_commute)
+            row['Overall'] = f"{overall_count} ({result['front_commute_rate']:.2f}%)"
             front_data.append(row)
         st.dataframe(pd.DataFrame(front_data), use_container_width=True, hide_index=True)
         
-        if len(file_names) == 2:
+        if show_differences:
             diff_data = []
-            r1 = st.session_state.analysis_results[file_names[0]]
-            r2 = st.session_state.analysis_results[file_names[1]]
+            r1 = st.session_state.analysis_results[sorted_files[0]]
+            r2 = st.session_state.analysis_results[sorted_files[1]]
             row = {'Metric': 'Difference'}
             for length in range(1, 6):
                 diff = r2['front_commute_pct'][length] - r1['front_commute_pct'][length]
@@ -459,19 +450,26 @@ if st.session_state.analysis_results:
         
         st.markdown("**Back-End Commutable (Release ≤ threshold):**")
         back_data = []
-        for fname, result in st.session_state.analysis_results.items():
+        for fname in sorted_files:
+            result = st.session_state.analysis_results[fname]
             display_name = st.session_state.uploaded_files[fname]['display_name']
             row = {'File': display_name}
             for length in range(1, 6):
-                row[f'{length}-day'] = f"{result['back_commute_pct'][length]:.2f}%"
-            row['Overall'] = f"{result['back_commute_rate']:.2f}%"
+                total = result['trip_counts'][length]
+                commute_count = int(total * result['back_commute_pct'][length] / 100)
+                pct = result['back_commute_pct'][length]
+                row[f'{length}-day'] = f"{commute_count} ({pct:.2f}%)"
+            # Overall
+            total_commute = sum(result['trip_counts'][i] * result['back_commute_pct'][i] / 100 for i in range(1, 6))
+            overall_count = int(total_commute)
+            row['Overall'] = f"{overall_count} ({result['back_commute_rate']:.2f}%)"
             back_data.append(row)
         st.dataframe(pd.DataFrame(back_data), use_container_width=True, hide_index=True)
         
-        if len(file_names) == 2:
+        if show_differences:
             diff_data = []
-            r1 = st.session_state.analysis_results[file_names[0]]
-            r2 = st.session_state.analysis_results[file_names[1]]
+            r1 = st.session_state.analysis_results[sorted_files[0]]
+            r2 = st.session_state.analysis_results[sorted_files[1]]
             row = {'Metric': 'Difference'}
             for length in range(1, 6):
                 diff = r2['back_commute_pct'][length] - r1['back_commute_pct'][length]
@@ -483,19 +481,26 @@ if st.session_state.analysis_results:
         
         st.markdown("**Both Ends Commutable:**")
         both_data = []
-        for fname, result in st.session_state.analysis_results.items():
+        for fname in sorted_files:
+            result = st.session_state.analysis_results[fname]
             display_name = st.session_state.uploaded_files[fname]['display_name']
             row = {'File': display_name}
             for length in range(1, 6):
-                row[f'{length}-day'] = f"{result['both_commute_pct'][length]:.2f}%"
-            row['Overall'] = f"{result['both_commute_rate']:.2f}%"
+                total = result['trip_counts'][length]
+                commute_count = int(total * result['both_commute_pct'][length] / 100)
+                pct = result['both_commute_pct'][length]
+                row[f'{length}-day'] = f"{commute_count} ({pct:.2f}%)"
+            # Overall
+            total_commute = sum(result['trip_counts'][i] * result['both_commute_pct'][i] / 100 for i in range(1, 6))
+            overall_count = int(total_commute)
+            row['Overall'] = f"{overall_count} ({result['both_commute_rate']:.2f}%)"
             both_data.append(row)
         st.dataframe(pd.DataFrame(both_data), use_container_width=True, hide_index=True)
         
-        if len(file_names) == 2:
+        if show_differences:
             diff_data = []
-            r1 = st.session_state.analysis_results[file_names[0]]
-            r2 = st.session_state.analysis_results[file_names[1]]
+            r1 = st.session_state.analysis_results[sorted_files[0]]
+            r2 = st.session_state.analysis_results[sorted_files[1]]
             row = {'Metric': 'Difference'}
             for length in range(1, 6):
                 diff = r2['both_commute_pct'][length] - r1['both_commute_pct'][length]
