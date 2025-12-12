@@ -317,9 +317,13 @@ if st.session_state.analysis_results:
             
             if fname not in st.session_state.detailed_trips:
                 with st.spinner("Loading detailed trip data..."):
+                    # Get bid month from uploaded file data
+                    bid_month = fdata['month']
+                    
                     detailed_trips = analysis_engine.get_detailed_trips(
                         fdata['content'],
-                        selected_base
+                        selected_base,
+                        bid_month
                     )
                     st.session_state.detailed_trips[fname] = detailed_trips
             

@@ -133,6 +133,139 @@ def get_effective_dates(trip_lines):
     
     return days_of_week, start_date, end_date, occurrences
 
+def get_previous_month_abbr(bid_month):
+    """Get the 3-letter abbreviation for the previous month"""
+    prev_month_map = {
+        'January': 'DEC', 'February': 'JAN', 'March': 'FEB',
+        'April': 'MAR', 'May': 'APR', 'June': 'MAY',
+        'July': 'JUN', 'August': 'JUL', 'September': 'AUG',
+        'October': 'SEP', 'November': 'OCT', 'December': 'NOV'
+    }
+    return prev_month_map.get(bid_month, '')
+
+def is_split_trip(trip_lines, bid_month):
+    """
+    Detect if this is a split trip:
+    1. EFFECTIVE line contains previous month abbreviation
+    2. Day sequence has repeating day letters
+    """
+    # Get EFFECTIVE line
+    effective_line = ""
+    for line in trip_lines:
+        if 'EFFECTIVE' in line:
+            effective_line = line
+            break
+    
+    if not effective_line:
+        return False
+    
+    # Check for previous month
+    prev_month = get_previous_month_abbr(bid_month)
+    if not prev_month or prev_month not in effective_line:
+        return False
+    
+    # Check for repeating day letters
+    day_letters = []
+    for line in trip_lines:
+        if len(line) > 3:
+            day_col = line[1:4].strip()
+            if day_col in ['A', 'B', 'C', 'D', 'E']:
+                day_letters.append(day_col)
+    
+    # If any day letter appears more than once, it's a split
+    from collections import Counter
+    day_count = Counter(day_letters)
+    has_repeat = any(count > 1 for count in day_count.values())
+    
+    return has_repeat
+
+def split_trip_into_sections(trip_lines):
+    """
+    Split a trip into two sections at the point where day letters restart
+    Section 1: Header + first occurrence of days + TOTAL CREDIT/PAY (for section 1 only)
+    Section 2: Second occurrence of days (no TOTAL CREDIT/PAY)
+    Returns: (section1_lines, section2_lines, split_index)
+    """
+    day_letters = []
+    day_line_indices = []
+    
+    for i, line in enumerate(trip_lines):
+        if len(line) > 3:
+            day_col = line[1:4].strip()
+            if day_col in ['A', 'B', 'C', 'D', 'E']:
+                day_letters.append(day_col)
+                day_line_indices.append(i)
+    
+    if not day_letters:
+        return trip_lines, [], -1
+    
+    # Find where first day repeats
+    split_index = -1
+    for i in range(1, len(day_letters)):
+        if day_letters[i] in day_letters[:i]:
+            split_index = day_line_indices[i]
+            break
+    
+    if split_index == -1:
+        return trip_lines, [], -1
+    
+    # Section 1: From start to split point (includes header)
+    # Need to include TOTAL CREDIT/PAY at the end for section 1
+    section1 = trip_lines[:split_index]
+    
+    # Add TOTAL CREDIT and TOTAL PAY lines to section 1
+    for line in trip_lines[split_index:]:
+        if 'TOTAL CREDIT' in line or 'TOTAL PAY' in line:
+            section1.append(line)
+    
+    # Section 2: From split point to TOTAL CREDIT (excluding it)
+    section2_end = len(trip_lines)
+    for i in range(split_index, len(trip_lines)):
+        if 'TOTAL CREDIT' in trip_lines[i]:
+            section2_end = i
+            break
+    
+    # Section 2 needs the header lines too (trip number, EFFECTIVE, etc.)
+    header_lines = []
+    for line in trip_lines:
+        if 'EFFECTIVE' in line:
+            break
+        header_lines.append(line)
+    
+    section2 = header_lines + trip_lines[split_index:section2_end]
+    
+    return section1, section2, split_index
+
+def calculate_credit_for_section(trip_lines):
+    """
+    Calculate credit for a trip section without TOTAL CREDIT line
+    Credit = max(sum of BLK times, 5.15 * number of days)
+    """
+    # Get all BLK times
+    block_times = get_flight_block_times(trip_lines)
+    
+    # Convert H.MM to decimal hours
+    def hmm_to_decimal(hmm):
+        hours = int(hmm)
+        minutes = int(round((hmm - hours) * 100))
+        return hours + (minutes / 60.0)
+    
+    total_blk = sum(hmm_to_decimal(blk) for blk in block_times)
+    
+    # Count unique days
+    day_letters = []
+    for line in trip_lines:
+        if len(line) > 3:
+            day_col = line[1:4].strip()
+            if day_col in ['A', 'B', 'C', 'D', 'E'] and day_col not in day_letters:
+                day_letters.append(day_col)
+    
+    num_days = len(day_letters)
+    min_daily_credit = 5.15 * num_days
+    
+    # Return the higher value
+    return max(total_blk, min_daily_credit)
+
 def get_trip_number(trip_lines):
     """Extract trip number from trip header"""
     for line in trip_lines:
@@ -144,22 +277,43 @@ def get_trip_number(trip_lines):
     return None
 
 def get_total_pay(trip_lines):
-    """Extract TOTAL PAY value"""
+    """Extract TOTAL PAY value - handles H:MM format and converts to decimal hours"""
     for line in trip_lines:
         if 'TOTAL PAY' in line:
             parts = line.split()
             for i, part in enumerate(parts):
                 if part == 'PAY' and i + 1 < len(parts):
                     pay_str = parts[i + 1]
+                    # Remove TL suffix if present
                     if pay_str.endswith('TL'):
+                        pay_str = pay_str[:-2]
+                    
+                    # Check if it's in H:MM format (has colon)
+                    if ':' in pay_str:
                         try:
-                            return float(pay_str[:-2])
+                            # Split by colon
+                            time_parts = pay_str.split(':')
+                            if len(time_parts) == 2:
+                                hours = int(time_parts[0])
+                                minutes = int(time_parts[1])
+                                # Convert to decimal hours
+                                return hours + (minutes / 60.0)
+                        except ValueError:
+                            pass
+                    else:
+                        # Try parsing as decimal (old format or fallback)
+                        try:
+                            return float(pay_str)
                         except ValueError:
                             pass
     return None
 
 def get_flight_block_times(trip_lines):
-    """Extract all flight block times (BLK column) - returns list of decimal hours"""
+    """
+    Extract all flight block times (BLK column) - returns list in H.MM format
+    Note: Format is H.MM (e.g., 2.37 = 2 hours 37 minutes, NOT 2.37 decimal hours)
+    We keep them as-is since the format already represents H:MM with a period separator
+    """
     block_times = []
     
     for line in trip_lines:
@@ -167,12 +321,12 @@ def get_flight_block_times(trip_lines):
             continue
         
         # Look for flight lines with departure/arrival pattern
-        # Format: airport time airport time decimal_number
-        # The decimal number after the second airport/time is the block time
+        # Format: airport time airport time H.MM
+        # The H.MM number after the second airport/time is the block time
         parts = line.split()
         
         for i in range(len(parts) - 1):
-            # Look for pattern: AIRPORT(3 letters) TIME(4 digits) then a decimal number
+            # Look for pattern: AIRPORT(3 letters) TIME(4 digits) then a H.MM number
             if (i >= 2 and 
                 len(parts[i-2]) == 3 and parts[i-2].isalpha() and  # departure airport
                 len(parts[i-1]) == 4 and parts[i-1].isdigit() and  # departure time
@@ -183,14 +337,15 @@ def get_flight_block_times(trip_lines):
                 arr_time = parts[i+1].rstrip('*')
                 if len(arr_time) == 4 and arr_time.isdigit():
                     # Look for block time in next few positions
-                    # Block time is decimal format like 2.37, 4.57, etc.
+                    # Block time is H.MM format like 2.37, 4.57, etc.
                     for j in range(i+2, min(i+5, len(parts))):
                         part = parts[j]
-                        # Check if this is a decimal number (block time)
+                        # Check if this is a H.MM number (block time)
                         if '.' in part:
                             try:
                                 block_time = float(part)
                                 # Block times are typically between 0.5 and 15 hours
+                                # Note: these are stored as H.MM (e.g., 2.37) which we keep as-is
                                 if 0.1 <= block_time <= 15.0:
                                     block_times.append(block_time)
                                     break
@@ -235,21 +390,23 @@ def extract_detailed_trip_info(trip_lines):
     total_credit = get_total_credit(trip_lines)
     total_pay = get_total_pay(trip_lines)
     
-    # Get block times for longest/shortest leg (in decimal hours)
+    # Get block times for longest/shortest leg (in H.MM format)
     block_times = get_flight_block_times(trip_lines)
-    longest_leg = max(block_times) if block_times else 0  # decimal hours
-    shortest_leg = min(block_times) if block_times else 0  # decimal hours
+    longest_leg = max(block_times) if block_times else 0  # H.MM format
+    shortest_leg = min(block_times) if block_times else 0  # H.MM format
     
-    # Convert decimal hours to HH:MM format
-    def decimal_hours_to_hhmm(hours):
-        if hours == 0:
+    # Convert H.MM format to HH:MM display format
+    # Example: 2.37 means 2 hours 37 minutes
+    def hmm_to_display(time_val):
+        if time_val == 0:
             return "0:00"
-        h = int(hours)
-        m = int((hours - h) * 60)
-        return f"{h}:{m:02d}"
+        # Split the float: integer part is hours, decimal part is minutes
+        hours = int(time_val)
+        minutes = int(round((time_val - hours) * 100))  # .37 becomes 37 minutes
+        return f"{hours}:{minutes:02d}"
     
-    longest_leg_str = decimal_hours_to_hhmm(longest_leg)
-    shortest_leg_str = decimal_hours_to_hhmm(shortest_leg)
+    longest_leg_str = hmm_to_display(longest_leg)
+    shortest_leg_str = hmm_to_display(shortest_leg)
     
     # Get raw trip text
     raw_text = '\n'.join(trip_lines)
@@ -518,9 +675,10 @@ def analyze_file(file_content, base_filter, front_commute_minutes, back_commute_
     
     return result
 
-def get_detailed_trips(file_content, base_filter):
+def get_detailed_trips(file_content, base_filter, bid_month):
     """
     Extract detailed information for all trips in a file
+    Handles split trips (when EFFECTIVE contains previous month)
     Returns list of trip detail dicts
     """
     trips = parse_trips(file_content)
@@ -536,16 +694,47 @@ def get_detailed_trips(file_content, base_filter):
         if base_filter != "All Bases" and base != base_filter:
             continue
         
-        # Get occurrences for this trip
-        days_of_week, start, end, occurrences = get_effective_dates(trip)
-        
-        # Extract detailed info
-        trip_info = extract_detailed_trip_info(trip)
-        trip_info['occurrences'] = occurrences
-        
-        # Add one entry per occurrence
-        for _ in range(occurrences):
-            detailed_trips.append(trip_info.copy())
+        # Check if this is a split trip
+        if is_split_trip(trip, bid_month):
+            # Split into two sections
+            section1, section2, split_idx = split_trip_into_sections(trip)
+            
+            if section1 and section2:
+                # SECTION 1: Uses file's TOTAL CREDIT/PAY, occurs on previous month date only (1 occurrence)
+                trip_info1 = extract_detailed_trip_info(section1)
+                trip_info1['trip_number'] = trip_info1['trip_number'] + '-1' if trip_info1['trip_number'] else 'N/A-1'
+                trip_info1['occurrences'] = 1
+                detailed_trips.append(trip_info1)
+                
+                # SECTION 2: Calculate credit manually, no pay, uses normal occurrence counting
+                trip_info2 = extract_detailed_trip_info(section2)
+                trip_info2['trip_number'] = trip_info2['trip_number'] + '-2' if trip_info2['trip_number'] else 'N/A-2'
+                
+                # Override credit calculation for section 2
+                calculated_credit = calculate_credit_for_section(section2)
+                trip_info2['total_credit'] = calculated_credit
+                trip_info2['total_pay'] = None  # No pay for section 2
+                
+                # Get occurrences for section 2 (subtract 1 for the first occurrence)
+                days_of_week, start, end, total_occurrences = get_effective_dates(trip)
+                section2_occurrences = max(total_occurrences - 1, 0)
+                trip_info2['occurrences'] = section2_occurrences
+                
+                # Add section 2 entries
+                for _ in range(section2_occurrences):
+                    detailed_trips.append(trip_info2.copy())
+        else:
+            # Normal trip (not split)
+            # Get occurrences for this trip
+            days_of_week, start, end, occurrences = get_effective_dates(trip)
+            
+            # Extract detailed info
+            trip_info = extract_detailed_trip_info(trip)
+            trip_info['occurrences'] = occurrences
+            
+            # Add one entry per occurrence
+            for _ in range(occurrences):
+                detailed_trips.append(trip_info.copy())
     
     return detailed_trips
 
