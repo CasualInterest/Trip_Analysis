@@ -736,13 +736,18 @@ def get_detailed_trips(file_content, base_filter, bid_month):
             if section1 and section2:
                 # SECTION 1: Uses file's TOTAL CREDIT/PAY, occurs on previous month date only (1 occurrence)
                 trip_info1 = extract_detailed_trip_info(section1)
-                trip_info1['trip_number'] = trip_info1['trip_number'] + '-1' if trip_info1['trip_number'] else 'N/A-1'
+                # Include base in trip number for uniqueness
+                base_code = trip_info1['base'] if trip_info1['base'] != 'UNKNOWN' else ''
+                trip_num = trip_info1['trip_number'] if trip_info1['trip_number'] else 'N/A'
+                trip_info1['trip_number'] = f"{trip_num}-1 ({base_code})" if base_code else f"{trip_num}-1"
                 trip_info1['occurrences'] = 1
                 detailed_trips.append(trip_info1)
                 
                 # SECTION 2: Calculate credit manually, no pay, uses normal occurrence counting
                 trip_info2 = extract_detailed_trip_info(section2)
-                trip_info2['trip_number'] = trip_info2['trip_number'] + '-2' if trip_info2['trip_number'] else 'N/A-2'
+                base_code = trip_info2['base'] if trip_info2['base'] != 'UNKNOWN' else ''
+                trip_num = trip_info2['trip_number'] if trip_info2['trip_number'] else 'N/A'
+                trip_info2['trip_number'] = f"{trip_num}-2 ({base_code})" if base_code else f"{trip_num}-2"
                 
                 # Override credit calculation for section 2
                 calculated_credit = calculate_credit_for_section(section2)

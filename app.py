@@ -356,53 +356,39 @@ if st.session_state.analysis_results:
                 )
             
             with filter_col2:
-                # Time options: 00:00 to 23:59 in 1-minute increments (or 30-min for reasonable dropdown size)
+                # Time options: 00:00 to 23:59 in 30-min increments, plus 23:59
                 time_options = [f"{h:02d}:{m:02d}" for h in range(24) for m in [0, 30]]
-                # Add 23:59 as the last option
                 time_options.append("23:59")
                 
                 col_a, col_b = st.columns(2)
                 with col_a:
-                    default_report_start = st.session_state.trip_filters.get('report_start', '00:00')
-                    report_start_idx = time_options.index(default_report_start) if default_report_start in time_options else 0
-                    report_start = st.selectbox("Report Start", time_options, index=report_start_idx, key='filter_report_start')
+                    report_start = st.selectbox("Report Start", time_options, index=0, key='filter_report_start')
                 with col_b:
-                    default_report_end = st.session_state.trip_filters.get('report_end', '23:59')
-                    report_end_idx = time_options.index(default_report_end) if default_report_end in time_options else len(time_options)-1
-                    report_end = st.selectbox("Report End", time_options, index=report_end_idx, key='filter_report_end')
+                    report_end = st.selectbox("Report End", time_options, index=len(time_options)-1, key='filter_report_end')
             
             with filter_col3:
                 col_a, col_b = st.columns(2)
                 with col_a:
-                    default_release_start = st.session_state.trip_filters.get('release_start', '00:00')
-                    release_start_idx = time_options.index(default_release_start) if default_release_start in time_options else 0
-                    release_start = st.selectbox("Release Start", time_options, index=release_start_idx, key='filter_release_start')
+                    release_start = st.selectbox("Release Start", time_options, index=0, key='filter_release_start')
                 with col_b:
-                    default_release_end = st.session_state.trip_filters.get('release_end', '23:59')
-                    release_end_idx = time_options.index(default_release_end) if default_release_end in time_options else len(time_options)-1
-                    release_end = st.selectbox("Release End", time_options, index=release_end_idx, key='filter_release_end')
+                    release_end = st.selectbox("Release End", time_options, index=len(time_options)-1, key='filter_release_end')
             
             with filter_col4:
-                search_term = st.text_input("Search Trip #", key='filter_search', placeholder="e.g., 44", value=st.session_state.trip_filters.get('search_term', ''))
+                search_term = st.text_input("Search Trip #", key='filter_search', placeholder="e.g., 44")
             
             with filter_col5:
                 st.write("")  # Spacer
                 st.write("")  # Spacer
                 if st.button("🔄 Clear", key='clear_filters'):
-                    # Reset filter state
-                    st.session_state.trip_filters = {
-                        'trip_length': 'All',
-                        'report_start': '00:00',
-                        'report_end': '23:59',
-                        'release_start': '00:00',
-                        'release_end': '23:59',
-                        'search_term': '',
-                        'sort_column': None,
-                        'sort_ascending': True
-                    }
                     # Clear detailed trips cache to force reload with unchecked boxes
                     if fname in st.session_state.detailed_trips:
                         del st.session_state.detailed_trips[fname]
+                    # Delete all filter widget keys - they'll reset to defaults on rerun
+                    keys_to_delete = ['filter_trip_length', 'filter_report_start', 'filter_report_end', 
+                                     'filter_release_start', 'filter_release_end', 'filter_search']
+                    for key in keys_to_delete:
+                        if key in st.session_state:
+                            del st.session_state[key]
                     st.rerun()
             
             # Apply filters
