@@ -57,6 +57,27 @@ st.sidebar.subheader("Base Filter")
 base_options = ["All Bases", "ATL", "BOS", "NYC", "DTW", "SLC", "MSP", "SEA", "LAX"]
 selected_base = st.sidebar.selectbox("Select Base", base_options, key='sidebar_base')
 
+# Update Analysis button
+st.sidebar.markdown("---")
+if st.session_state.uploaded_files and st.sidebar.button("🔄 Update Analysis", type="secondary", key='sidebar_update'):
+    with st.spinner("Updating analysis with new settings..."):
+        st.session_state.analysis_results = {}
+        
+        front_minutes = time_to_minutes[front_end_time]
+        back_minutes = time_to_minutes[back_end_time]
+        
+        for fname, fdata in st.session_state.uploaded_files.items():
+            result = analysis_engine.analyze_file(
+                fdata['content'],
+                selected_base,
+                front_minutes,
+                back_minutes
+            )
+            st.session_state.analysis_results[fname] = result
+        
+        st.success("✅ Analysis updated!")
+        st.rerun()
+
 # Clear button
 if st.sidebar.button("🗑️ Clear All Data", type="primary", key='sidebar_clear'):
     st.session_state.uploaded_files = {}
