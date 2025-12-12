@@ -387,6 +387,9 @@ if st.session_state.analysis_results:
                         'sort_column': None,
                         'sort_ascending': True
                     }
+                    # Clear the widgets by setting their keys
+                    if 'filter_search' in st.session_state:
+                        st.session_state.filter_search = ''
                     st.rerun()
             
             # Apply filters
@@ -415,10 +418,10 @@ if st.session_state.analysis_results:
                             if t['release_time_minutes'] is not None 
                             and release_start_min <= t['release_time_minutes'] <= release_end_min]
             
-            # Search filter
+            # Search filter - match partial trip number (including suffix like -1, -2)
             if search_term:
                 filtered_trips = [t for t in filtered_trips 
-                                if t['trip_number'] and search_term in t['trip_number']]
+                                if t['trip_number'] and search_term in str(t['trip_number'])]
             
             # Display trip count
             st.markdown(f"**Showing {len(filtered_trips)} trips**")
