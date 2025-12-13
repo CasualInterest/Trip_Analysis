@@ -764,4 +764,4 @@ if st.session_state.analysis_results:
 
 # Footer
 st.markdown("---")
-st.markdown("✈️ Pilot Trip Scheduling Analysis Tool | Upload up to 12 files for comparison")
+st.markdown("✈️ Pilot Trip Scheduling Analysis Tool | Upload up to 12 files for comparison | UPLOAD ONE FILE FOR DETAILED ANALYSIS OR MULTIPLE FILES FOR COMPARISON")
