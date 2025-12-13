@@ -87,7 +87,7 @@ if st.sidebar.button("🗑️ Clear All Data", type="primary", key='sidebar_clea
 
 # Main title
 st.title("✈️ Pilot Trip Scheduling Analysis")
-st.markdown("Upload trip schedule files to analyze metrics including trip length, credit hours, red-eyes, and commutability.")
+st.markdown("Upload trip schedule files to analyze metrics including trip length, credit hours, red-eyes, and commutability. NO DATA IS STORED, ALL DATA IS DELETED UPON CLOSE.")
 
 # File upload section
 st.header("📁 Upload Schedule Files")
