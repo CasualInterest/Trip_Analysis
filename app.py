@@ -87,7 +87,7 @@ if st.sidebar.button("🗑️ Clear All Data", type="primary", key='sidebar_clea
 
 # Main title
 st.title("✈️ Pilot Trip Scheduling Analysis")
-st.markdown("Upload trip schedule files to analyze metrics including trip length, credit hours, red-eyes, and commutability. NO DATA IS STORED, ALL DATA IS DELETED UPON CLOSE.")
+st.markdown("Upload trip schedule files to analyze metrics including trip length, credit hours, red-eyes, and commutability.")
 
 # File upload section
 st.header("📁 Upload Schedule Files")
@@ -443,14 +443,18 @@ if st.session_state.analysis_results:
                         'Legs': trip['total_legs'],
                         'Longest': trip['longest_leg'],
                         'Shortest': trip['shortest_leg'],
-                        'Credit': f"{trip['total_credit']:.2f}" if trip['total_credit'] else 'N/A',
-                        'Pay': f"{trip['total_pay']:.2f}" if trip['total_pay'] else 'N/A',
+                        'Credit': trip['total_credit'] if trip['total_credit'] is not None else None,
+                        'Pay': trip['total_pay'] if trip['total_pay'] is not None else None,
+                        'SIT': trip['sit'] if trip['sit'] is not None else None,
+                        'EDP': trip['edp'] if trip['edp'] is not None else None,
+                        'HOL': trip['hol'] if trip['hol'] is not None else None,
+                        'CARVE': trip['carve'] if trip['carve'] is not None else None,
                         'Occurs': trip['occurrences']
                     })
                 
                 df = pd.DataFrame(df_data)
                 
-                # Use data_editor for selection capability
+                # Use data_editor for selection capability with column sorting enabled
                 edited_df = st.data_editor(
                     df,
                     column_config={
@@ -460,7 +464,7 @@ if st.session_state.analysis_results:
                             default=False,
                             width='small'
                         ),
-                        'Trip #': st.column_config.TextColumn('Trip #', width='small'),
+                        'Trip #': st.column_config.TextColumn('Trip #', width='medium'),
                         'Base': st.column_config.TextColumn('Base', width='small'),
                         'Length': st.column_config.TextColumn('Length', width='small'),
                         'Report': st.column_config.TextColumn('Report', width='small'),
@@ -468,14 +472,19 @@ if st.session_state.analysis_results:
                         'Legs': st.column_config.NumberColumn('Legs', width='small'),
                         'Longest': st.column_config.TextColumn('Longest', width='small'),
                         'Shortest': st.column_config.TextColumn('Shortest', width='small'),
-                        'Credit': st.column_config.TextColumn('Credit', width='small'),
-                        'Pay': st.column_config.TextColumn('Pay', width='small'),
+                        'Credit': st.column_config.NumberColumn('Credit', width='small', format="%.2f"),
+                        'Pay': st.column_config.NumberColumn('Pay', width='small', format="%.2f"),
+                        'SIT': st.column_config.NumberColumn('SIT', width='small', format="%.2f"),
+                        'EDP': st.column_config.NumberColumn('EDP', width='small', format="%.2f"),
+                        'HOL': st.column_config.NumberColumn('HOL', width='small', format="%.2f"),
+                        'CARVE': st.column_config.NumberColumn('CARVE', width='small', format="%.2f"),
                         'Occurs': st.column_config.NumberColumn('Occurs', width='small', help='Number of times this trip operates')
                     },
-                    disabled=['Trip #', 'Base', 'Length', 'Report', 'Release', 'Legs', 'Longest', 'Shortest', 'Credit', 'Pay', 'Occurs'],
+                    disabled=['Trip #', 'Base', 'Length', 'Report', 'Release', 'Legs', 'Longest', 'Shortest', 'Credit', 'Pay', 'SIT', 'EDP', 'HOL', 'CARVE', 'Occurs'],
                     hide_index=True,
                     use_container_width=True,
-                    height=600
+                    height=600,
+                    key='trip_table'
                 )
                 
                 # Check which trips are selected
@@ -764,4 +773,4 @@ if st.session_state.analysis_results:
 
 # Footer
 st.markdown("---")
-st.markdown("✈️ Pilot Trip Scheduling Analysis Tool | Upload up to 12 files for comparison | UPLOAD ONE FILE FOR DETAILED ANALYSIS OR MULTIPLE FILES FOR COMPARISON")
+st.markdown("✈️ Pilot Trip Scheduling Analysis Tool | Upload up to 12 files for comparison")

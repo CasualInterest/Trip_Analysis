@@ -276,35 +276,77 @@ def get_trip_number(trip_lines):
     return None
 
 def get_total_pay(trip_lines):
-    """Extract TOTAL PAY value - handles H:MM format and converts to decimal hours"""
+    """
+    Extract TOTAL PAY components - handles H:MM format and converts to decimal hours
+    Returns dict with total_pay, sit, edp, hol, carve
+    """
+    pay_dict = {
+        'total_pay': None,
+        'sit': None,
+        'edp': None,
+        'hol': None,
+        'carve': None
+    }
+    
     for line in trip_lines:
         if 'TOTAL PAY' in line:
             parts = line.split()
+            
+            # Find each component
             for i, part in enumerate(parts):
                 if part == 'PAY' and i + 1 < len(parts):
                     pay_str = parts[i + 1]
-                    # Remove TL suffix if present
                     if pay_str.endswith('TL'):
                         pay_str = pay_str[:-2]
-                    
-                    # Check if it's in H:MM format (has colon)
-                    if ':' in pay_str:
-                        try:
-                            # Split by colon
-                            time_parts = pay_str.split(':')
-                            if len(time_parts) == 2:
-                                hours = int(time_parts[0])
-                                minutes = int(time_parts[1])
-                                # Convert to decimal hours
-                                return hours + (minutes / 60.0)
-                        except ValueError:
-                            pass
-                    else:
-                        # Try parsing as decimal (old format or fallback)
-                        try:
-                            return float(pay_str)
-                        except ValueError:
-                            pass
+                    pay_dict['total_pay'] = parse_time_to_decimal(pay_str)
+                
+                elif part.endswith('SIT') and i < len(parts):
+                    sit_str = part[:-3]  # Remove 'SIT'
+                    try:
+                        pay_dict['sit'] = float(sit_str)
+                    except ValueError:
+                        pass
+                
+                elif part.endswith('EDP') and i < len(parts):
+                    edp_str = part[:-3]  # Remove 'EDP'
+                    try:
+                        pay_dict['edp'] = float(edp_str)
+                    except ValueError:
+                        pass
+                
+                elif part.endswith('HOL') and i < len(parts):
+                    hol_str = part[:-3]  # Remove 'HOL'
+                    try:
+                        pay_dict['hol'] = float(hol_str)
+                    except ValueError:
+                        pass
+                
+                elif part.endswith('CARVE'):
+                    carve_str = part[:-5]  # Remove 'CARVE'
+                    try:
+                        pay_dict['carve'] = float(carve_str)
+                    except ValueError:
+                        pass
+            break
+    
+    return pay_dict
+
+def parse_time_to_decimal(time_str):
+    """Convert H:MM format or decimal to decimal hours"""
+    if ':' in time_str:
+        try:
+            time_parts = time_str.split(':')
+            if len(time_parts) == 2:
+                hours = int(time_parts[0])
+                minutes = int(time_parts[1])
+                return hours + (minutes / 60.0)
+        except ValueError:
+            pass
+    else:
+        try:
+            return float(time_str)
+        except ValueError:
+            pass
     return None
 
 def get_flight_block_times(trip_lines):
@@ -385,9 +427,9 @@ def extract_detailed_trip_info(trip_lines):
     report_time_str = minutes_to_time(report_time_minutes)
     release_time_str = minutes_to_time(release_time_minutes)
     
-    # Get total credit and pay
+    # Get total credit and pay components
     total_credit = get_total_credit(trip_lines)
-    total_pay = get_total_pay(trip_lines)
+    pay_data = get_total_pay(trip_lines)
     
     # Get block times for longest/shortest leg (in H.MM format)
     block_times = get_flight_block_times(trip_lines)
@@ -422,7 +464,11 @@ def extract_detailed_trip_info(trip_lines):
         'longest_leg': longest_leg_str,
         'shortest_leg': shortest_leg_str,
         'total_credit': total_credit,
-        'total_pay': total_pay,
+        'total_pay': pay_data['total_pay'],
+        'sit': pay_data['sit'],
+        'edp': pay_data['edp'],
+        'hol': pay_data['hol'],
+        'carve': pay_data['carve'],
         'raw_text': raw_text
     }
 
@@ -725,6 +771,10 @@ def get_detailed_trips(file_content, base_filter, bid_month):
                 calculated_credit = calculate_credit_for_section(section2)
                 trip_info2['total_credit'] = calculated_credit
                 trip_info2['total_pay'] = None  # No pay for section 2
+                trip_info2['sit'] = None
+                trip_info2['edp'] = None
+                trip_info2['hol'] = None
+                trip_info2['carve'] = None
                 
                 # Get occurrences for section 2 (subtract 1 for the first occurrence)
                 days_of_week, start, end, total_occurrences = get_effective_dates(trip)
