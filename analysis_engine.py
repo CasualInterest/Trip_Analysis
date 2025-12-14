@@ -182,12 +182,8 @@ def is_split_trip(trip_lines, bid_month):
 def split_trip_into_sections(trip_lines):
     """
     Split a trip into two sections at the point where day letters restart
-    Section 1: Header + first occurrence through last unique day
-    Section 2: Header + unrepeated days from section 1 + repeated days
-    
-    Example: A,B,C,D,B pattern:
-    - Section 1: A,B,C,D (Dec date only)
-    - Section 2: A,B (A is unrepeated, so it carries over; B is the repeat)
+    Section 1: Everything up to (but not including) the first repeated day + TOTAL CREDIT/PAY
+    Section 2: From the repeated day onwards (no TOTAL CREDIT/PAY)
     
     Returns: (section1_lines, section2_lines, split_index)
     """
@@ -206,30 +202,15 @@ def split_trip_into_sections(trip_lines):
     
     # Find where first day repeats
     split_index = -1
-    first_repeat_letter = None
     for i in range(1, len(day_letters)):
         if day_letters[i] in day_letters[:i]:
             split_index = day_line_indices[i]
-            first_repeat_letter = day_letters[i]
             break
     
     if split_index == -1:
         return trip_lines, [], -1
     
-    # Determine which days appear in section 1 before the repeat
-    section1_days = day_letters[:day_letters.index(first_repeat_letter, 1)]
-    
-    # For section 2, we need days that appear in section 1 but DON'T repeat later
-    # These days "carry over" to section 2
-    repeated_days = set()
-    for i in range(len(day_letters)):
-        if day_letters[i] in day_letters[:i]:
-            repeated_days.add(day_letters[i])
-    
-    carryover_days = [d for d in section1_days if d not in repeated_days]
-    
-    # Section 1: From start to split point (includes header)
-    # Need to include TOTAL CREDIT/PAY at the end for section 1
+    # Section 1: From start to split point
     section1 = trip_lines[:split_index]
     
     # Add TOTAL CREDIT and TOTAL PAY lines to section 1
@@ -249,24 +230,7 @@ def split_trip_into_sections(trip_lines):
     first_day_line = day_line_indices[0] if day_line_indices else split_index
     header_lines = trip_lines[:first_day_line]
     
-    # Now we need to add carryover days from section 1
-    carryover_lines = []
-    if carryover_days:
-        # Find the lines for each carryover day
-        for day_letter in carryover_days:
-            # Find this day's index in the original day sequence
-            day_idx = day_letters.index(day_letter)
-            start_line = day_line_indices[day_idx]
-            
-            # Find end line (next day or split point)
-            if day_idx + 1 < len(day_line_indices):
-                end_line = day_line_indices[day_idx + 1]
-            else:
-                end_line = split_index
-            
-            carryover_lines.extend(trip_lines[start_line:end_line])
-    
-    section2 = header_lines + carryover_lines + trip_lines[split_index:section2_end]
+    section2 = header_lines + trip_lines[split_index:section2_end]
     
     return section1, section2, split_index
 
