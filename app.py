@@ -445,10 +445,10 @@ if st.session_state.analysis_results:
                         'Shortest': trip['shortest_leg'],
                         'Credit': trip['total_credit'] if trip['total_credit'] is not None else None,
                         'Pay': trip['total_pay'] if trip['total_pay'] is not None else None,
-                        'SIT': trip['sit'] if trip['sit'] is not None else None,
-                        'EDP': trip['edp'] if trip['edp'] is not None else None,
-                        'HOL': trip['hol'] if trip['hol'] is not None else None,
-                        'CARVE': trip['carve'] if trip['carve'] is not None else None,
+                        'SIT': trip.get('sit'),
+                        'EDP': trip.get('edp'),
+                        'HOL': trip.get('hol'),
+                        'CARVE': trip.get('carve'),
                         'Occurs': trip['occurrences']
                     })
                 
