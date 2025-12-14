@@ -461,6 +461,7 @@ def extract_detailed_trip_info(trip_lines):
         'release_time': release_time_str,
         'release_time_minutes': release_time_minutes,  # For filtering
         'total_legs': len(flight_legs),
+        'last_day_legs': last_day_legs,  # For filtering
         'longest_leg': longest_leg_str,
         'shortest_leg': shortest_leg_str,
         'total_credit': total_credit,

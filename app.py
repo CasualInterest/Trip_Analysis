@@ -385,11 +385,32 @@ if st.session_state.analysis_results:
                         del st.session_state.detailed_trips[fname]
                     # Delete all filter widget keys - they'll reset to defaults on rerun
                     keys_to_delete = ['filter_trip_length', 'filter_report_start', 'filter_report_end', 
-                                     'filter_release_start', 'filter_release_end', 'filter_search']
+                                     'filter_release_start', 'filter_release_end', 'filter_search',
+                                     'filter_one_leg_home', 'filter_has_sit', 'filter_has_edp', 
+                                     'filter_has_hol', 'filter_has_carve']
                     for key in keys_to_delete:
                         if key in st.session_state:
                             del st.session_state[key]
                     st.rerun()
+            
+            # Checkbox filters row
+            st.markdown("#### Additional Filters")
+            checkbox_col1, checkbox_col2, checkbox_col3, checkbox_col4, checkbox_col5 = st.columns(5)
+            
+            with checkbox_col1:
+                one_leg_home = st.checkbox("One Leg Home Last Day", key='filter_one_leg_home')
+            
+            with checkbox_col2:
+                has_sit = st.checkbox("Has SIT Pay", key='filter_has_sit')
+            
+            with checkbox_col3:
+                has_edp = st.checkbox("Has EDP", key='filter_has_edp')
+            
+            with checkbox_col4:
+                has_hol = st.checkbox("Has Holiday Pay", key='filter_has_hol')
+            
+            with checkbox_col5:
+                has_carve = st.checkbox("Has CARVE Pay", key='filter_has_carve')
             
             # Apply filters
             filtered_trips = trips.copy()
@@ -421,6 +442,22 @@ if st.session_state.analysis_results:
             if search_term:
                 filtered_trips = [t for t in filtered_trips 
                                 if t['trip_number'] and search_term in str(t['trip_number'])]
+            
+            # Checkbox filters
+            if one_leg_home:
+                filtered_trips = [t for t in filtered_trips if t.get('last_day_legs') == 1]
+            
+            if has_sit:
+                filtered_trips = [t for t in filtered_trips if t.get('sit') is not None and t.get('sit') > 0]
+            
+            if has_edp:
+                filtered_trips = [t for t in filtered_trips if t.get('edp') is not None and t.get('edp') > 0]
+            
+            if has_hol:
+                filtered_trips = [t for t in filtered_trips if t.get('hol') is not None and t.get('hol') > 0]
+            
+            if has_carve:
+                filtered_trips = [t for t in filtered_trips if t.get('carve') is not None and t.get('carve') > 0]
             
             # Display trip count
             st.markdown(f"**Showing {len(filtered_trips)} trips**")
