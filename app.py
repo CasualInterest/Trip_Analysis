@@ -347,7 +347,7 @@ if st.session_state.analysis_results:
             st.markdown("### Filters")
             
             # Create filter columns
-            filter_col1, filter_col2, filter_col3, filter_col4, filter_col5 = st.columns([1, 1.5, 1.5, 1, 0.5])
+            filter_col1, filter_col2, filter_col3, filter_col4, filter_col5, filter_col6 = st.columns([1, 1.5, 1.5, 1, 1, 0.5])
             
             with filter_col1:
                 trip_length_filter = st.selectbox(
@@ -378,6 +378,13 @@ if st.session_state.analysis_results:
                 search_term = st.text_input("Search Trip #", key='filter_search', placeholder="e.g., 44")
             
             with filter_col5:
+                num_legs_filter = st.selectbox(
+                    "Number of Legs",
+                    ['All', '2', '3', '4', '5', '6', '7', '8', '9', '10+'],
+                    key='filter_num_legs'
+                )
+            
+            with filter_col6:
                 st.write("")  # Spacer
                 st.write("")  # Spacer
                 if st.button("🔄 Clear", key='clear_filters'):
@@ -386,7 +393,7 @@ if st.session_state.analysis_results:
                         del st.session_state.detailed_trips[fname]
                     # Delete all filter widget keys - they'll reset to defaults on rerun
                     keys_to_delete = ['filter_trip_length', 'filter_report_start', 'filter_report_end', 
-                                     'filter_release_start', 'filter_release_end', 'filter_search',
+                                     'filter_release_start', 'filter_release_end', 'filter_search', 'filter_num_legs',
                                      'filter_one_leg_home', 'filter_has_sit', 'filter_has_edp', 
                                      'filter_has_hol', 'filter_has_carve']
                     for key in keys_to_delete:
@@ -443,6 +450,14 @@ if st.session_state.analysis_results:
             if search_term:
                 filtered_trips = [t for t in filtered_trips 
                                 if t['trip_number'] and search_term in str(t['trip_number'])]
+            
+            # Number of legs filter
+            if num_legs_filter != 'All':
+                if num_legs_filter == '10+':
+                    filtered_trips = [t for t in filtered_trips if t['total_legs'] >= 10]
+                else:
+                    num_legs = int(num_legs_filter)
+                    filtered_trips = [t for t in filtered_trips if t['total_legs'] == num_legs]
             
             # Checkbox filters
             if one_leg_home:
