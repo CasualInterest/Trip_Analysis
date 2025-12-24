@@ -62,6 +62,7 @@ st.sidebar.markdown("---")
 if st.session_state.uploaded_files and st.sidebar.button("🔄 Update Analysis", type="secondary", key='sidebar_update'):
     with st.spinner("Updating analysis with new settings..."):
         st.session_state.analysis_results = {}
+        st.session_state.detailed_trips = {}  # Clear detailed trips cache too
         
         front_minutes = time_to_minutes[front_end_time]
         back_minutes = time_to_minutes[back_end_time]
