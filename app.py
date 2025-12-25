@@ -57,6 +57,11 @@ st.sidebar.subheader("Base Filter")
 base_options = ["All Bases", "ATL", "BOS", "NYC", "DTW", "SLC", "MSP", "SEA", "LAX"]
 selected_base = st.sidebar.selectbox("Select Base", base_options, key='sidebar_base')
 
+# Credit filter
+st.sidebar.subheader("Credit Filter")
+credit_options = ["All", "Hard Block <15 minutes", "15-30 minutes", "30-60 minutes", ">60 minutes"]
+selected_credit = st.sidebar.selectbox("Select Credit", credit_options, key='sidebar_credit')
+
 # Update Analysis button
 st.sidebar.markdown("---")
 if st.session_state.uploaded_files and st.sidebar.button("🔄 Update Analysis", type="secondary", key='sidebar_update'):
@@ -257,9 +262,9 @@ if st.session_state.analysis_results:
                 st.metric("Both Ends Commute", f"{result['both_commute_rate']:.1f}%")
             
             # Charts in tabs
-            tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
                 "Trip Length", "Single Leg Last Day", "Credit/Trip", 
-                "Credit/Day", "Commutability"
+                "Credit/Day", "Commutability", "Credit Distribution"
             ])
             
             with tab1:
@@ -309,6 +314,30 @@ if st.session_state.analysis_results:
                 fig = px.bar(data, x='Length', y='Percentage', color='Type',
                             barmode='group', title='Commutability by Trip Length (%)')
                 st.plotly_chart(fig, use_container_width=True)
+            
+            with tab6:
+                # Credit Distribution
+                if 'credit_distribution' in result:
+                    data = pd.DataFrame({
+                        'Category': list(result['credit_distribution'].keys()),
+                        'Trips': list(result['credit_distribution'].values()),
+                        'Percentage': [result['credit_distribution_pct'][cat] for cat in result['credit_distribution'].keys()]
+                    })
+                    
+                    # Display as a table
+                    st.markdown("**Credit Beyond Block Distribution**")
+                    display_data = data.copy()
+                    display_data['Trips'] = display_data['Trips'].astype(int)
+                    display_data['Percentage'] = display_data['Percentage'].apply(lambda x: f"{x:.1f}%")
+                    st.dataframe(display_data, use_container_width=True, hide_index=True)
+                    
+                    # Bar chart
+                    fig = px.bar(data, x='Category', y='Trips',
+                                title='Credit Distribution (Number of Trips)',
+                                labels={'Category': 'Credit Category', 'Trips': 'Number of Trips'})
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("Credit distribution data not available. Re-analyze to see credit distribution.")
         
         else:
             # DETAILED TRIP TABLE VIEW
@@ -347,7 +376,7 @@ if st.session_state.analysis_results:
             st.markdown("### Filters")
             
             # Create filter columns
-            filter_col1, filter_col2, filter_col3, filter_col4, filter_col5, filter_col6 = st.columns([1, 1.5, 1.5, 1, 1, 0.5])
+            filter_col1, filter_col2, filter_col3, filter_col4, filter_col5, filter_col6, filter_col7 = st.columns([1, 1.5, 1.5, 1, 1, 1.2, 0.5])
             
             with filter_col1:
                 trip_length_filter = st.selectbox(
@@ -385,6 +414,13 @@ if st.session_state.analysis_results:
                 )
             
             with filter_col6:
+                credit_filter = st.selectbox(
+                    "Credit",
+                    ['All', "Hard Block <15 minutes", "15-30 minutes", "30-60 minutes", ">60 minutes"],
+                    key='filter_credit'
+                )
+            
+            with filter_col7:
                 st.write("")  # Spacer
                 st.write("")  # Spacer
                 if st.button("🔄 Clear", key='clear_filters'):
@@ -394,6 +430,7 @@ if st.session_state.analysis_results:
                     # Delete all filter widget keys - they'll reset to defaults on rerun
                     keys_to_delete = ['filter_trip_length', 'filter_report_start', 'filter_report_end', 
                                      'filter_release_start', 'filter_release_end', 'filter_search', 'filter_num_legs',
+                                     'filter_credit',
                                      'filter_one_leg_home', 'filter_has_sit', 'filter_has_edp', 
                                      'filter_has_hol', 'filter_has_carve']
                     for key in keys_to_delete:
@@ -474,6 +511,10 @@ if st.session_state.analysis_results:
             
             if has_carve:
                 filtered_trips = [t for t in filtered_trips if t.get('carve') is not None and t.get('carve') > 0]
+            
+            # Credit filter
+            if credit_filter != 'All':
+                filtered_trips = [t for t in filtered_trips if t.get('credit_category') == credit_filter]
             
             # Display trip count
             st.markdown(f"**Showing {len(filtered_trips)} trips**")
