@@ -57,11 +57,6 @@ st.sidebar.subheader("Base Filter")
 base_options = ["All Bases", "ATL", "BOS", "NYC", "DTW", "SLC", "MSP", "SEA", "LAX"]
 selected_base = st.sidebar.selectbox("Select Base", base_options, key='sidebar_base')
 
-# Credit filter
-st.sidebar.subheader("Credit Filter")
-credit_options = ["All", "Hard Block <15 minutes", "15-30 minutes", "30-60 minutes", ">60 minutes"]
-selected_credit = st.sidebar.selectbox("Select Credit", credit_options, key='sidebar_credit')
-
 # Update Analysis button
 st.sidebar.markdown("---")
 if st.session_state.uploaded_files and st.sidebar.button("🔄 Update Analysis", type="secondary", key='sidebar_update'):
