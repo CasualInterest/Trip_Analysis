@@ -28,7 +28,7 @@ BASE_MAPPING = {
 def get_credit_value(trip_lines):
     """
     Extract the CR (credit beyond block) value from trip data.
-    Looks for pattern like: "14.32BL    6.28CR"
+    Looks for pattern like: "14.32BL    6.28CR" or ".00CR" in TOTAL CREDIT line only.
     
     Args:
         trip_lines: List of trip text lines
@@ -36,10 +36,19 @@ def get_credit_value(trip_lines):
     Returns:
         float: Credit value (e.g., 6.28 for 6 hours 28 minutes), or 0.0 if not found
     """
-    trip_text = '\n'.join(trip_lines)
-    match = re.search(r'(\d+\.\d+)CR', trip_text)
-    if match:
-        return float(match.group(1))
+    # Find the TOTAL CREDIT line and extract CR value from it
+    for line in trip_lines:
+        if 'TOTAL CREDIT' in line:
+            # Look for the CR value in this line only
+            # Pattern: number (with optional leading digits) followed by CR
+            # Examples: "6.28CR", "0.00CR", ".00CR"
+            match = re.search(r'(\d*\.\d+)CR\s', line)
+            if match:
+                return float(match.group(1))
+            # Also try without trailing space for end of line cases
+            match = re.search(r'(\d*\.\d+)CR$', line)
+            if match:
+                return float(match.group(1))
     return 0.0
 
 def categorize_credit(cr_value):
