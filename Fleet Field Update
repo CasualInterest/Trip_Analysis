@@ -1,0 +1,165 @@
+# Fleet Field Feature - Update Summary
+
+## Overview
+Added a Fleet field to the file upload form, allowing you to compare different fleets (e.g., aircraft types like 320, 321, 319) within the same month and year.
+
+## What's New
+
+### File Upload Form
+**Before:**
+- Month (dropdown)
+- Year (number input)
+
+**After:**
+- Month (dropdown)
+- Year (number input)
+- **Fleet** (text input) - NEW!
+
+### Fleet Field Details
+- **Optional field** - can be left blank
+- Accepts any text (e.g., "320", "321", "319", "A320", "737")
+- Has placeholder text: "e.g., 320, 321, 319"
+- Has help text: "Optional fleet identifier (e.g., aircraft type)"
+
+## Display Changes
+
+### File Naming
+Files are now named with the fleet identifier:
+
+**Without Fleet:**
+```
+schedule_012026.txt
+```
+
+**With Fleet:**
+```
+schedule_320_012026.txt
+```
+
+### Display Names
+Files are displayed throughout the app with the fleet identifier:
+
+**Without Fleet:**
+```
+February 2026
+```
+
+**With Fleet:**
+```
+320 February 2026
+```
+
+## Usage Examples
+
+### Scenario 1: Compare Different Fleets in Same Month
+1. Upload first file:
+   - Month: February
+   - Year: 2026
+   - Fleet: 320
+   - Result: "320 February 2026"
+
+2. Upload second file:
+   - Month: February
+   - Year: 2026
+   - Fleet: 321
+   - Result: "321 February 2026"
+
+3. Upload third file:
+   - Month: February
+   - Year: 2026
+   - Fleet: 319
+   - Result: "319 February 2026"
+
+4. Analyze all three files together to see fleet comparisons!
+
+### Scenario 2: Track Same Fleet Across Months
+1. Upload files:
+   - 320 January 2026
+   - 320 February 2026
+   - 320 March 2026
+
+2. Compare how the 320 fleet scheduling changes over time
+
+### Scenario 3: No Fleet Identifier (Optional)
+If you don't need fleet comparison:
+- Leave Fleet field blank
+- Display shows: "February 2026" (as before)
+
+## Where Fleet Appears
+
+The fleet identifier (when provided) appears in:
+
+1. **Loaded Files section** - Shows "320 February 2026"
+2. **Analysis Results tables** - File column shows "320 February 2026"
+3. **Comparison charts** - X-axis labels show "320 February 2026"
+4. **PDF exports** - Report includes fleet in file names
+
+## Technical Details
+
+### Data Structure
+File data now includes:
+```python
+{
+    'content': '...',
+    'month': 'February',
+    'year': 2026,
+    'fleet': '320',  # <-- NEW! (or None if not provided)
+    'display_name': '320 February 2026',  # <-- Updated format
+    'original_name': 'schedule.txt'
+}
+```
+
+### Filename Format
+- With fleet: `basename_FLEET_MMYYYY.ext`
+- Without fleet: `basename_MMYYYY.ext`
+
+Example:
+- With fleet: `schedule_320_022026.txt`
+- Without fleet: `schedule_022026.txt`
+
+## Backward Compatibility
+
+**Existing files without fleet data:**
+- Will continue to work normally
+- Display shows: "Month Year" (e.g., "February 2026")
+- No changes to existing functionality
+
+**New files without fleet specified:**
+- Work exactly like before
+- Display shows: "Month Year"
+- Fleet field is optional
+
+## Benefits
+
+1. **Fleet Comparison**: Compare different aircraft types side-by-side
+2. **Clear Labeling**: Instantly see which fleet data you're looking at
+3. **Flexible**: Optional field - use when needed, skip when not
+4. **Professional**: Matches industry practice of tracking by fleet type
+
+## Deployment
+
+Upload the updated `app.py` to your GitHub repository. Streamlit Cloud will auto-redeploy.
+
+No changes needed to:
+- `analysis_engine.py`
+- `requirements.txt`
+- Any other files
+
+## Example Use Cases
+
+### Airlines with Multiple Aircraft Types
+- Compare A320 vs A321 vs A319 schedules
+- Analyze different fleet efficiency metrics
+- Track which fleet has better credit ratios
+
+### Charter Operations
+- Compare different aircraft configurations
+- Track seasonal fleet deployment
+- Analyze fleet-specific trip patterns
+
+### Analysis Scenarios
+- "How do 320 trips compare to 321 trips in February?"
+- "Which fleet has better commutability?"
+- "What's the credit difference between fleets?"
+
+The fleet field makes all these analyses easier!

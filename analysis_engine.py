@@ -25,6 +25,52 @@ BASE_MAPPING = {
     'LAX': 'LAX', 'LGB': 'LAX', 'ONT': 'LAX'
 }
 
+def get_credit_value(trip_lines):
+    """
+    Extract the CR (credit beyond block) value from trip data.
+    Looks for pattern like: "14.32BL    6.28CR" or ".00CR" in TOTAL CREDIT line only.
+    
+    Args:
+        trip_lines: List of trip text lines
+    
+    Returns:
+        float: Credit value (e.g., 6.28 for 6 hours 28 minutes), or 0.0 if not found
+    """
+    # Find the TOTAL CREDIT line and extract CR value from it
+    for line in trip_lines:
+        if 'TOTAL CREDIT' in line:
+            # Look for the CR value in this line only
+            # Pattern: number (with optional leading digits) followed by CR
+            # Examples: "6.28CR", "0.00CR", ".00CR"
+            match = re.search(r'(\d*\.\d+)CR\s', line)
+            if match:
+                return float(match.group(1))
+            # Also try without trailing space for end of line cases
+            match = re.search(r'(\d*\.\d+)CR$', line)
+            if match:
+                return float(match.group(1))
+    return 0.0
+
+def categorize_credit(cr_value):
+    """
+    Categorize credit time based on defined ranges.
+    Credit time is in HH.MM format (e.g., 6.28 = 6 hours 28 minutes)
+    
+    Args:
+        cr_value: Credit value in HH.MM format
+    
+    Returns:
+        str: Category name
+    """
+    if cr_value < 0.15:
+        return "Hard Block <15 minutes"
+    elif cr_value < 0.30:
+        return "15-30 minutes"
+    elif cr_value < 1.00:
+        return "30-60 minutes"
+    else:
+        return ">60 minutes"
+
 def parse_trips(file_content):
     """Parse the trip file content"""
     trips = []
@@ -449,6 +495,10 @@ def extract_detailed_trip_info(trip_lines):
     longest_leg_str = hmm_to_display(longest_leg)
     shortest_leg_str = hmm_to_display(shortest_leg)
     
+    # Get credit value and category
+    credit_value = get_credit_value(trip_lines)
+    credit_category = categorize_credit(credit_value)
+    
     # Get raw trip text
     raw_text = '\n'.join(trip_lines)
     
@@ -470,6 +520,8 @@ def extract_detailed_trip_info(trip_lines):
         'edp': pay_data['edp'],
         'hol': pay_data['hol'],
         'carve': pay_data['carve'],
+        'credit_value': credit_value,  # NEW: Credit beyond block (CR value)
+        'credit_category': credit_category,  # NEW: Credit category for filtering
         'raw_text': raw_text
     }
 
@@ -612,6 +664,14 @@ def analyze_file(file_content, base_filter, front_commute_minutes, back_commute_
     commute_back = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
     commute_both = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
     
+    # Credit distribution counters
+    credit_distribution = {
+        "Hard Block <15 minutes": 0,
+        "15-30 minutes": 0,
+        "30-60 minutes": 0,
+        ">60 minutes": 0
+    }
+    
     for trip in trips:
         first_airport = get_first_departure_airport(trip)
         if not first_airport:
@@ -662,6 +722,12 @@ def analyze_file(file_content, base_filter, front_commute_minutes, back_commute_
                 commute_back[length] += occurrences
             if front_ok and back_ok:
                 commute_both[length] += occurrences
+        
+        # Credit category distribution
+        credit_value = get_credit_value(trip)
+        credit_category = categorize_credit(credit_value)
+        if credit_category in credit_distribution:
+            credit_distribution[credit_category] += occurrences
     
     # Calculate percentages and averages
     result = {
@@ -718,6 +784,13 @@ def analyze_file(file_content, base_filter, front_commute_minutes, back_commute_
         for length in range(1, 6)
     }
     result['both_commute_rate'] = sum(commute_both.values()) / total_trips * 100 if total_trips > 0 else 0
+    
+    # Credit distribution (counts and percentages)
+    result['credit_distribution'] = credit_distribution
+    result['credit_distribution_pct'] = {
+        category: (count / total_trips * 100) if total_trips > 0 else 0
+        for category, count in credit_distribution.items()
+    }
     
     return result
 
