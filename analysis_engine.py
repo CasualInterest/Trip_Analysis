@@ -8,7 +8,7 @@ import re
 from io import BytesIO
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib import colors
@@ -831,33 +831,51 @@ def generate_pdf_report(analysis_results, uploaded_files, base_filter, front_tim
     story.append(Spacer(1, 0.1*inch))
     
     # Calculate column widths based on number of files
+    available_width = 10*inch  # landscape letter minus margins
+    
     if num_files == 1:
         col_widths = [2*inch] + [1.2*inch] * 6
     elif num_files == 2:
         col_widths = [1.8*inch] + [1.0*inch] * 6
-    else:
-        # For 3+ files, make columns narrower
-        available_width = 10*inch  # landscape letter minus margins
-        file_col_width = (available_width - 1.5*inch) / 6  # 6 columns (1-day through Overall)
+    elif num_files <= 6:
+        # For 3-6 files
+        file_col_width = (available_width - 1.5*inch) / 6
         col_widths = [1.5*inch] + [file_col_width] * 6
+    elif num_files <= 9:
+        # For 7-9 files, make columns narrower
+        file_col_width = (available_width - 1.2*inch) / 6
+        col_widths = [1.2*inch] + [file_col_width] * 6
+    else:
+        # For 10+ files, make very narrow
+        file_col_width = (available_width - 1.0*inch) / 6
+        col_widths = [1.0*inch] + [file_col_width] * 6
     
     # Helper function to create table
     def create_table(data, title):
-        story.append(Paragraph(f"<b>{title}</b>", ParagraphStyle('Heading', fontSize=10, spaceAfter=0.05*inch)))
+        # Calculate appropriate font size based on number of files
+        if num_files <= 6:
+            font_size = 7
+        elif num_files <= 9:
+            font_size = 6
+        else:
+            font_size = 5
+        
+        title_para = Paragraph(f"<b>{title}</b>", ParagraphStyle('Heading', fontSize=10, spaceAfter=0.05*inch))
         t = Table(data, colWidths=col_widths)
         t.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 7),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
-            ('TOPPADDING', (0, 0), (-1, 0), 4),
+            ('FONTSIZE', (0, 0), (-1, -1), font_size),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 3),
+            ('TOPPADDING', (0, 0), (-1, 0), 3),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ]))
-        story.append(t)
-        story.append(Spacer(1, 0.05*inch))
+        
+        # Use KeepTogether to prevent table from splitting across pages
+        story.append(KeepTogether([title_para, t, Spacer(1, 0.05*inch)]))
     
     # 1. Trip Length Distribution
     data = [['File', '1-day', '2-day', '3-day', '4-day', '5-day', 'Total']]

@@ -459,6 +459,20 @@ if st.session_state.analysis_results:
                     num_legs = int(num_legs_filter)
                     filtered_trips = [t for t in filtered_trips if t['total_legs'] == num_legs]
             
+            # Credit filter (CR time in minutes)
+            if credit_filter != 'All':
+                if credit_filter == 'Hard Block':
+                    # CR = 0 minutes (hard block, no credit beyond block time)
+                    filtered_trips = [t for t in filtered_trips if t.get('credit_minutes') is not None and t.get('credit_minutes') == 0]
+                elif credit_filter == '<15 minutes':
+                    filtered_trips = [t for t in filtered_trips if t.get('credit_minutes') is not None and 0 < t.get('credit_minutes') < 15]
+                elif credit_filter == '15-30 minutes':
+                    filtered_trips = [t for t in filtered_trips if t.get('credit_minutes') is not None and 15 <= t.get('credit_minutes') <= 30]
+                elif credit_filter == '30-60 minutes':
+                    filtered_trips = [t for t in filtered_trips if t.get('credit_minutes') is not None and 30 < t.get('credit_minutes') <= 60]
+                elif credit_filter == '>60 minutes':
+                    filtered_trips = [t for t in filtered_trips if t.get('credit_minutes') is not None and t.get('credit_minutes') > 60]
+            
             # Checkbox filters
             if one_leg_home:
                 filtered_trips = [t for t in filtered_trips if t.get('last_day_legs') == 1]
