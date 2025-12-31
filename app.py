@@ -241,13 +241,24 @@ if st.session_state.analysis_results:
                 st.markdown("Ask questions about the summary statistics and metrics!")
                 st.markdown("*Examples: 'What does this data tell me?', 'Are 3-days or 4-days better for credit?'*")
                 
-                # API Key input
-                api_key_summary = st.text_input(
-                    "Anthropic API Key",
-                    type="password",
-                    help="Get your API key at https://console.anthropic.com",
-                    key="anthropic_api_key_summary"
-                )
+                # Try to get API key from secrets, then from session state, then from user input
+                api_key_summary = None
+                if "ANTHROPIC_API_KEY" in st.secrets:
+                    api_key_summary = st.secrets["ANTHROPIC_API_KEY"]
+                    st.success("✅ Using API key from Streamlit secrets")
+                else:
+                    # API Key input
+                    api_key_summary = st.text_input(
+                        "Anthropic API Key",
+                        type="password",
+                        help="Get your API key at https://console.anthropic.com, or save it in Settings > Secrets as ANTHROPIC_API_KEY",
+                        key="anthropic_api_key_summary",
+                        value=st.session_state.get('saved_api_key', '')
+                    )
+                    
+                    if api_key_summary and api_key_summary != st.session_state.get('saved_api_key', ''):
+                        st.session_state.saved_api_key = api_key_summary
+                        st.info("💡 API key saved for this session. To save permanently, add it to Streamlit Settings > Secrets")
                 
                 # Question input
                 user_question_summary = st.text_area(
@@ -570,13 +581,24 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                 st.markdown("Ask questions about the filtered trips in natural language!")
                 st.markdown("*Examples: 'Which trips have the best credit ratio?', 'Show me commutable 3-days with high pay'*")
                 
-                # API Key input
-                api_key = st.text_input(
-                    "Anthropic API Key",
-                    type="password",
-                    help="Get your API key at https://console.anthropic.com",
-                    key="anthropic_api_key"
-                )
+                # Try to get API key from secrets, then from session state, then from user input
+                api_key = None
+                if "ANTHROPIC_API_KEY" in st.secrets:
+                    api_key = st.secrets["ANTHROPIC_API_KEY"]
+                    st.success("✅ Using API key from Streamlit secrets")
+                else:
+                    # API Key input
+                    api_key = st.text_input(
+                        "Anthropic API Key",
+                        type="password",
+                        help="Get your API key at https://console.anthropic.com, or save it in Settings > Secrets as ANTHROPIC_API_KEY",
+                        key="anthropic_api_key",
+                        value=st.session_state.get('saved_api_key', '')
+                    )
+                    
+                    if api_key and api_key != st.session_state.get('saved_api_key', ''):
+                        st.session_state.saved_api_key = api_key
+                        st.info("💡 API key saved for this session. To save permanently, add it to Streamlit Settings > Secrets")
                 
                 # Question input
                 user_question = st.text_area(
@@ -735,13 +757,24 @@ Please provide a helpful, concise answer based on this data. If you're recommend
             st.markdown("Ask questions comparing the different bid packs!")
             st.markdown("*Examples: 'Which month has better 3-day trips?', 'How do November and December compare for commutability?'*")
             
-            # API Key input
-            api_key_comparison = st.text_input(
-                "Anthropic API Key",
-                type="password",
-                help="Get your API key at https://console.anthropic.com",
-                key="anthropic_api_key_comparison"
-            )
+            # Try to get API key from secrets, then from session state, then from user input
+            api_key_comparison = None
+            if "ANTHROPIC_API_KEY" in st.secrets:
+                api_key_comparison = st.secrets["ANTHROPIC_API_KEY"]
+                st.success("✅ Using API key from Streamlit secrets")
+            else:
+                # API Key input
+                api_key_comparison = st.text_input(
+                    "Anthropic API Key",
+                    type="password",
+                    help="Get your API key at https://console.anthropic.com, or save it in Settings > Secrets as ANTHROPIC_API_KEY",
+                    key="anthropic_api_key_comparison",
+                    value=st.session_state.get('saved_api_key', '')
+                )
+                
+                if api_key_comparison and api_key_comparison != st.session_state.get('saved_api_key', ''):
+                    st.session_state.saved_api_key = api_key_comparison
+                    st.info("💡 API key saved for this session. To save permanently, add it to Streamlit Settings > Secrets")
             
             # Question input
             user_question_comparison = st.text_area(
