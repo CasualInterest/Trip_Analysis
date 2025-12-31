@@ -444,7 +444,7 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
             st.markdown("### Filters")
             
             # Create filter columns
-            filter_col1, filter_col2, filter_col3, filter_col4, filter_col5, filter_col6 = st.columns([1, 1.5, 1.5, 1, 1, 0.5])
+            filter_col1, filter_col2, filter_col3, filter_col4, filter_col5, filter_col6, filter_col7 = st.columns([1, 1.5, 1.5, 1, 1, 1, 0.5])
             
             with filter_col1:
                 trip_length_filter = st.selectbox(
