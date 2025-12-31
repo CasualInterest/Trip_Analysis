@@ -560,15 +560,58 @@ def get_total_credit(trip_lines):
     return None
 
 def has_redeye_flight(flight_legs):
-    """Check if ANY flight leg is a red-eye"""
+    """
+    Check if ANY flight leg is a red-eye
+    
+    Red-eye definition: An OVERNIGHT flight that intrudes the pilot's WOCL 
+    (Window of Circadian Low: 02:00-05:59) while in the air.
+    
+    Key: Must be an overnight flight (departs evening, arrives next morning).
+    Early morning same-day departures (05:45, 06:00) are NOT red-eyes.
+    """
     for dep_airport, dep_time, arr_airport, arr_time in flight_legs:
         try:
+            # Parse times (handle * for next day arrival)
             dep_hour = int(dep_time[:2])
-            arr_hour = int(arr_time[:2])
-            if dep_hour >= 20 and arr_hour >= 2:
-                return True
+            dep_min = int(dep_time[2:4]) if len(dep_time) >= 4 else 0
+            arr_time_clean = arr_time.rstrip('*')
+            arr_hour = int(arr_time_clean[:2])
+            arr_min = int(arr_time_clean[2:4]) if len(arr_time_clean) >= 4 else 0
+            
+            # Convert to minutes since midnight
+            dep_minutes = dep_hour * 60 + dep_min
+            arr_minutes = arr_hour * 60 + arr_min
+            
+            # WOCL window: 02:00 to 05:59
+            wocl_start = 2 * 60  # 120 minutes (02:00)
+            wocl_end = 5 * 60 + 59  # 359 minutes (05:59)
+            
+            # A red-eye MUST be an overnight flight
+            # Overnight = has * OR departs after 18:00 with early morning arrival
+            is_overnight = '*' in arr_time
+            
+            # Additional overnight check for flights without * marker
+            if not is_overnight:
+                # If departs evening (18:00+) and arrives early morning (before 12:00)
+                if dep_minutes >= 18 * 60 and arr_minutes < 12 * 60:
+                    is_overnight = True
+            
+            # Only check WOCL for overnight flights
+            if is_overnight:
+                # Red-eye if arrival is during WOCL (02:00-05:59)
+                if wocl_start <= arr_minutes <= wocl_end:
+                    return True
+                # Also catches flights that depart late (20:00+) and arrive shortly after WOCL (06:00-08:00)
+                # These still intrude WOCL while airborne
+                if dep_minutes >= 20 * 60 and wocl_start <= arr_minutes <= 8 * 60:
+                    return True
+            
+            # Explicitly ignore early morning same-day flights
+            # (e.g., 05:45 departure is just an early start, not a red-eye)
+                    
         except (ValueError, IndexError):
             continue
+    
     return False
 
 def calculate_report_time(first_dep_time):
