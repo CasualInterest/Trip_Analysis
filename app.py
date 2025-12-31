@@ -492,6 +492,88 @@ if st.session_state.analysis_results:
             # Display trip count
             st.markdown(f"**Showing {len(filtered_trips)} trips**")
             
+            # AI Chat Section (above the table)
+            with st.expander("💬 Ask AI About Your Trips", expanded=False):
+                st.markdown("Ask questions about the filtered trips in natural language!")
+                st.markdown("*Examples: 'Which trips have the best credit ratio?', 'Show me commutable 3-days with high pay'*")
+                
+                # API Key input
+                api_key = st.text_input(
+                    "Anthropic API Key",
+                    type="password",
+                    help="Get your API key at https://console.anthropic.com",
+                    key="anthropic_api_key"
+                )
+                
+                # Question input
+                user_question = st.text_area(
+                    "Your Question",
+                    placeholder="e.g., What are the top 5 trips by credit per day?",
+                    height=80,
+                    key="ai_question"
+                )
+                
+                if st.button("Ask AI", type="primary"):
+                    if not api_key:
+                        st.error("Please enter your Anthropic API key first")
+                    elif not user_question:
+                        st.error("Please enter a question")
+                    elif len(filtered_trips) == 0:
+                        st.warning("No trips to analyze. Adjust your filters.")
+                    else:
+                        with st.spinner("Analyzing trips..."):
+                            try:
+                                # Prepare trip data for AI
+                                import anthropic
+                                
+                                # Create a summary of the filtered trips
+                                trip_summary = []
+                                for trip in filtered_trips[:100]:  # Limit to first 100 to avoid token limits
+                                    trip_summary.append({
+                                        'trip_number': trip.get('trip_number', 'N/A'),
+                                        'base': trip['base'],
+                                        'length': f"{trip['length']}-day",
+                                        'report': trip.get('report_time'),
+                                        'release': trip.get('release_time'),
+                                        'legs': trip['total_legs'],
+                                        'longest_leg': trip.get('longest_leg'),
+                                        'shortest_leg': trip.get('shortest_leg'),
+                                        'credit': trip.get('total_credit'),
+                                        'pay': trip.get('total_pay'),
+                                        'sit': trip.get('sit'),
+                                        'edp': trip.get('edp'),
+                                        'hol': trip.get('hol'),
+                                        'carve': trip.get('carve'),
+                                        'credit_per_day': trip.get('total_credit', 0) / trip['length'] if trip['length'] > 0 else 0,
+                                        'last_day_legs': trip.get('last_day_legs')
+                                    })
+                                
+                                # Call Claude API
+                                client = anthropic.Anthropic(api_key=api_key)
+                                message = client.messages.create(
+                                    model="claude-sonnet-4-20250514",
+                                    max_tokens=2000,
+                                    messages=[{
+                                        "role": "user",
+                                        "content": f"""You are analyzing pilot trip scheduling data. Here is the current filtered dataset of {len(filtered_trips)} trips:
+
+{trip_summary}
+
+The user's question is: {user_question}
+
+Please provide a helpful, concise answer based on this data. If you're recommending specific trips, include their trip numbers. Format your response clearly with bullet points or tables where appropriate."""
+                                    }]
+                                )
+                                
+                                # Display response
+                                st.success("✨ AI Analysis:")
+                                st.markdown(message.content[0].text)
+                                
+                            except ImportError:
+                                st.error("❌ Anthropic library not installed. Run: `pip install anthropic`")
+                            except Exception as e:
+                                st.error(f"❌ Error: {str(e)}")
+            
             # Create dataframe for display
             if filtered_trips:
                 # Initialize selected trip in session state
