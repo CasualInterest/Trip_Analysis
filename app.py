@@ -499,7 +499,7 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                     keys_to_delete = ['filter_trip_length', 'filter_report_start', 'filter_report_end', 
                                      'filter_release_start', 'filter_release_end', 'filter_search', 'filter_num_legs', 'filter_credit',
                                      'filter_one_leg_home', 'filter_has_sit', 'filter_has_edp', 
-                                     'filter_has_hol', 'filter_has_carve']
+                                     'filter_has_hol', 'filter_has_carve', 'filter_has_redeye']
                     for key in keys_to_delete:
                         if key in st.session_state:
                             del st.session_state[key]
@@ -507,7 +507,7 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
             
             # Checkbox filters row
             st.markdown("#### Additional Filters")
-            checkbox_col1, checkbox_col2, checkbox_col3, checkbox_col4, checkbox_col5 = st.columns(5)
+            checkbox_col1, checkbox_col2, checkbox_col3, checkbox_col4, checkbox_col5, checkbox_col6 = st.columns(6)
             
             with checkbox_col1:
                 one_leg_home = st.checkbox("One Leg Home Last Day", key='filter_one_leg_home')
@@ -523,6 +523,9 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
             
             with checkbox_col5:
                 has_carve = st.checkbox("Has CARVE Pay", key='filter_has_carve')
+            
+            with checkbox_col6:
+                has_redeye = st.checkbox("Has Red-Eye", key='filter_has_redeye')
             
             # Apply filters
             filtered_trips = trips.copy()
@@ -592,6 +595,9 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
             
             if has_carve:
                 filtered_trips = [t for t in filtered_trips if t.get('carve') is not None and t.get('carve') > 0]
+            
+            if has_redeye:
+                filtered_trips = [t for t in filtered_trips if t.get('has_redeye') == True]
             
             # Display trip count
             st.markdown(f"**Showing {len(filtered_trips)} trips**")

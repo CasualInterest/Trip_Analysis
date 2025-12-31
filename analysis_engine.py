@@ -449,6 +449,12 @@ def extract_detailed_trip_info(trip_lines):
     longest_leg_str = hmm_to_display(longest_leg)
     shortest_leg_str = hmm_to_display(shortest_leg)
     
+    # Check if trip has red-eye
+    has_redeye = has_redeye_flight(flight_legs)
+    
+    # Get credit components (BL and CR)
+    credit_components = get_credit_components(trip_lines)
+    
     # Get raw trip text
     raw_text = '\n'.join(trip_lines)
     
@@ -465,6 +471,9 @@ def extract_detailed_trip_info(trip_lines):
         'longest_leg': longest_leg_str,
         'shortest_leg': shortest_leg_str,
         'total_credit': total_credit,
+        'credit_minutes': credit_components['credit'],  # CR in minutes for filtering
+        'block_hours': credit_components['block'],  # BL in hours for reference
+        'has_redeye': has_redeye,  # For filtering
         'total_pay': pay_data['total_pay'],
         'sit': pay_data['sit'],
         'edp': pay_data['edp'],
