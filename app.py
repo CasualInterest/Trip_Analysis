@@ -730,6 +730,83 @@ Please provide a helpful, concise answer based on this data. If you're recommend
         # Multiple files - show detailed comparison tables
         st.subheader("📈 Detailed Comparison Analysis")
         
+        # AI Chat Section for Comparison View
+        with st.expander("💬 Ask AI About This Comparison", expanded=False):
+            st.markdown("Ask questions comparing the different bid packs!")
+            st.markdown("*Examples: 'Which month has better 3-day trips?', 'How do November and December compare for commutability?'*")
+            
+            # API Key input
+            api_key_comparison = st.text_input(
+                "Anthropic API Key",
+                type="password",
+                help="Get your API key at https://console.anthropic.com",
+                key="anthropic_api_key_comparison"
+            )
+            
+            # Question input
+            user_question_comparison = st.text_area(
+                "Your Question",
+                placeholder="e.g., Which month should I bid for to maximize credit per day?",
+                height=80,
+                key="ai_question_comparison"
+            )
+            
+            if st.button("Ask AI", type="primary", key="ask_ai_comparison"):
+                if not api_key_comparison:
+                    st.error("Please enter your Anthropic API key first")
+                elif not user_question_comparison:
+                    st.error("Please enter a question")
+                else:
+                    with st.spinner("Analyzing comparison data..."):
+                        try:
+                            import anthropic
+                            
+                            # Prepare comparison data for AI
+                            comparison_data = {}
+                            for fname in st.session_state.analysis_results.keys():
+                                fdata = st.session_state.uploaded_files[fname]
+                                result = st.session_state.analysis_results[fname]
+                                
+                                comparison_data[fdata['display_name']] = {
+                                    'total_trips': result['total_trips'],
+                                    'avg_trip_length': result['avg_trip_length'],
+                                    'avg_credit_per_trip': result['avg_credit_per_trip'],
+                                    'avg_credit_per_day': result['avg_credit_per_day'],
+                                    'trip_counts_by_length': result['trip_counts'],
+                                    'avg_credit_by_length': result['avg_credit_by_length'],
+                                    'avg_credit_per_day_by_length': result['avg_credit_per_day_by_length'],
+                                    'single_leg_last_day_pct': result['single_leg_pct'],
+                                    'redeye_pct': result['redeye_pct'],
+                                    'front_end_commutable_pct': result['front_commute_pct'],
+                                    'back_end_commutable_pct': result['back_commute_pct']
+                                }
+                            
+                            # Call Claude API
+                            client = anthropic.Anthropic(api_key=api_key_comparison)
+                            message = client.messages.create(
+                                model="claude-sonnet-4-20250514",
+                                max_tokens=2000,
+                                messages=[{
+                                    "role": "user",
+                                    "content": f"""You are analyzing pilot trip scheduling data comparing multiple bid packs. Here is the comparison data:
+
+{comparison_data}
+
+The user's question is: {user_question_comparison}
+
+Please provide a helpful, detailed comparison highlighting key differences and providing actionable recommendations."""
+                                }]
+                            )
+                            
+                            # Display response
+                            st.success("✨ AI Comparison Analysis:")
+                            st.markdown(message.content[0].text)
+                            
+                        except ImportError:
+                            st.error("❌ Anthropic library not installed. Run: `pip install anthropic`")
+                        except Exception as e:
+                            st.error(f"❌ Error: {str(e)}")
+        
         # Sort files by date (month/year)
         month_order = {
             'January': 1, 'February': 2, 'March': 3, 'April': 4,
