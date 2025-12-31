@@ -146,29 +146,42 @@ with col1:
                                 value=2026
                             )
                         
+                        # Fleet field (optional)
+                        fleet = st.text_input(
+                            "Fleet (optional)",
+                            placeholder="e.g., 320, 737, A220",
+                            help="Add a fleet identifier to differentiate files for the same month"
+                        )
+                        
                         submitted = st.form_submit_button("✅ Add File")
                         
                         if submitted:
-                            # Create unique filename based on date and original name
+                            # Create unique filename based on date and optional fleet
                             # Extract base name without extension
                             base_name = uploaded_file.name.rsplit('.', 1)[0] if '.' in uploaded_file.name else uploaded_file.name
                             extension = uploaded_file.name.rsplit('.', 1)[1] if '.' in uploaded_file.name else 'txt'
                             
-                            # Create new filename: basename_MMYYYY.ext
+                            # Create new filename: basename_MMYYYY_fleet.ext or basename_MMYYYY.ext
                             month_num = {
                                 'January': '01', 'February': '02', 'March': '03', 'April': '04',
                                 'May': '05', 'June': '06', 'July': '07', 'August': '08',
                                 'September': '09', 'October': '10', 'November': '11', 'December': '12'
                             }[month]
                             
-                            new_filename = f"{base_name}_{month_num}{year}.{extension}"
+                            if fleet:
+                                new_filename = f"{base_name}_{month_num}{year}_{fleet}.{extension}"
+                                display_name = f"{month} {year} ({fleet})"
+                            else:
+                                new_filename = f"{base_name}_{month_num}{year}.{extension}"
+                                display_name = f"{month} {year}"
                             
                             # Add to uploaded files with new filename
                             st.session_state.uploaded_files[new_filename] = {
                                 'content': content,
                                 'month': month,
                                 'year': year,
-                                'display_name': f"{month} {year}",
+                                'fleet': fleet if fleet else None,
+                                'display_name': display_name,
                                 'original_name': uploaded_file.name
                             }
                             st.session_state.file_counter += 1
