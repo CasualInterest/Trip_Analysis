@@ -482,6 +482,13 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                 )
             
             with filter_col6:
+                credit_filter = st.selectbox(
+                    "Credit",
+                    ['All', 'Hard Block', '<15 minutes', '15-30 minutes', '30-60 minutes', '>60 minutes'],
+                    key='filter_credit'
+                )
+            
+            with filter_col7:
                 st.write("")  # Spacer
                 st.write("")  # Spacer
                 if st.button("🔄 Clear", key='clear_filters'):
@@ -490,7 +497,7 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                         del st.session_state.detailed_trips[fname]
                     # Delete all filter widget keys - they'll reset to defaults on rerun
                     keys_to_delete = ['filter_trip_length', 'filter_report_start', 'filter_report_end', 
-                                     'filter_release_start', 'filter_release_end', 'filter_search', 'filter_num_legs',
+                                     'filter_release_start', 'filter_release_end', 'filter_search', 'filter_num_legs', 'filter_credit',
                                      'filter_one_leg_home', 'filter_has_sit', 'filter_has_edp', 
                                      'filter_has_hol', 'filter_has_carve']
                     for key in keys_to_delete:
