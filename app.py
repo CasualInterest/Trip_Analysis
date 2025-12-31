@@ -236,6 +236,79 @@ if st.session_state.analysis_results:
         )
         
         if view_mode == "Summary":
+            # AI Chat Section for Summary View
+            with st.expander("💬 Ask AI About This Analysis", expanded=False):
+                st.markdown("Ask questions about the summary statistics and metrics!")
+                st.markdown("*Examples: 'What does this data tell me?', 'Are 3-days or 4-days better for credit?'*")
+                
+                # API Key input
+                api_key_summary = st.text_input(
+                    "Anthropic API Key",
+                    type="password",
+                    help="Get your API key at https://console.anthropic.com",
+                    key="anthropic_api_key_summary"
+                )
+                
+                # Question input
+                user_question_summary = st.text_area(
+                    "Your Question",
+                    placeholder="e.g., What's the best trip length for maximizing credit per day?",
+                    height=80,
+                    key="ai_question_summary"
+                )
+                
+                if st.button("Ask AI", type="primary", key="ask_ai_summary"):
+                    if not api_key_summary:
+                        st.error("Please enter your Anthropic API key first")
+                    elif not user_question_summary:
+                        st.error("Please enter a question")
+                    else:
+                        with st.spinner("Analyzing..."):
+                            try:
+                                import anthropic
+                                
+                                # Prepare summary data for AI
+                                summary_data = {
+                                    'file': fdata['display_name'],
+                                    'total_trips': result['total_trips'],
+                                    'avg_trip_length': result['avg_trip_length'],
+                                    'avg_credit_per_trip': result['avg_credit_per_trip'],
+                                    'avg_credit_per_day': result['avg_credit_per_day'],
+                                    'trip_counts_by_length': result['trip_counts'],
+                                    'avg_credit_by_length': result['avg_credit_by_length'],
+                                    'avg_credit_per_day_by_length': result['avg_credit_per_day_by_length'],
+                                    'single_leg_last_day_pct': result['single_leg_pct'],
+                                    'redeye_pct': result['redeye_pct'],
+                                    'front_end_commutable_pct': result['front_commute_pct'],
+                                    'back_end_commutable_pct': result['back_commute_pct']
+                                }
+                                
+                                # Call Claude API
+                                client = anthropic.Anthropic(api_key=api_key_summary)
+                                message = client.messages.create(
+                                    model="claude-sonnet-4-20250514",
+                                    max_tokens=2000,
+                                    messages=[{
+                                        "role": "user",
+                                        "content": f"""You are analyzing pilot trip scheduling data. Here is the summary statistics:
+
+{summary_data}
+
+The user's question is: {user_question_summary}
+
+Please provide a helpful, concise answer based on this data. Explain patterns and provide actionable insights."""
+                                    }]
+                                )
+                                
+                                # Display response
+                                st.success("✨ AI Analysis:")
+                                st.markdown(message.content[0].text)
+                                
+                            except ImportError:
+                                st.error("❌ Anthropic library not installed. Run: `pip install anthropic`")
+                            except Exception as e:
+                                st.error(f"❌ Error: {str(e)}")
+            
             # SUMMARY VIEW (existing code)
             # Summary metrics
             col1, col2, col3, col4 = st.columns(4)
