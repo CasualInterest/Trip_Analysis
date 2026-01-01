@@ -46,72 +46,119 @@ def parse_trips(file_content):
     return trips
 
 def get_effective_dates(trip_lines):
-    """Parse EFFECTIVE date range, days of week, and EXCEPT dates"""
+    """
+    Parse EFFECTIVE date range, days of week, and EXCEPT dates
+    Handles all months (JAN, FEB, MAR, APR, MAY, JUN, JUL, AUG, SEP, OCT, NOV, DEC)
+    """
     header_line = ""
     except_line = ""
     
     for line in trip_lines:
         if 'EFFECTIVE' in line:
             header_line = line
-        elif 'EXCEPT' in line:
+        elif 'EXCEPT' in line and 'EXCPT' not in line:
             except_line = line
     
     if not header_line:
         return [], None, None, 1
     
+    # Month name to number mapping
+    month_map = {
+        'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
+        'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12
+    }
+    
     # Extract days of week
     dow_pattern = r'\b(MO|TU|WE|TH|FR|SA|SU)\b'
     days_of_week = re.findall(dow_pattern, header_line)
     
-    # Try "JAN## ONLY" pattern
-    only_match = re.search(r'(JAN|DEC)(\d{1,2})\s+ONLY', header_line)
+    # Try "MMM## ONLY" pattern (any month)
+    only_match = re.search(r'\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(\d{1,2})\s+ONLY\b', header_line)
     if only_match:
-        month = only_match.group(1)
+        month_str = only_match.group(1)
         day = int(only_match.group(2))
-        year = 2025 if month == 'DEC' else 2026
+        month_num = month_map[month_str]
         
-        date = datetime(year, 12 if month == 'DEC' else 1, day)
+        # Determine year - if month is Oct-Dec, it's current year, else next year
+        year = 2025 if month_num >= 10 else 2026
         
+        try:
+            date = datetime(year, month_num, day)
+        except ValueError:
+            return days_of_week, None, None, 1
+        
+        # Verify day of week matches
         dow_map = {'MO': 0, 'TU': 1, 'WE': 2, 'TH': 3, 'FR': 4, 'SA': 5, 'SU': 6}
         actual_dow = date.weekday()
         
-        for dow in days_of_week:
-            if dow_map[dow] == actual_dow:
-                return days_of_week, date, date, 1
-        
-        return days_of_week, date, date, 0
+        if days_of_week:
+            for dow in days_of_week:
+                if dow_map.get(dow) == actual_dow:
+                    return days_of_week, date, date, 1
+            return days_of_week, date, date, 0
+        else:
+            return days_of_week, date, date, 1
     
     # Try date range patterns
-    range_match = re.search(r'(DEC|JAN)(\d{1,2})-(JAN|DEC)\.\s*(\d{1,2})', header_line)
+    # Pattern 1: MMM##-MMM. ## (e.g., FEB14-MAR. 01)
+    range_match = re.search(r'\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(\d{1,2})-(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\.\s*(\d{1,2})\b', header_line)
+    
     if not range_match:
-        range_match = re.search(r'(JAN)(\d{1,2})-(\d{1,2})', header_line)
-        if range_match:
-            start_day = int(range_match.group(2))
-            end_day = int(range_match.group(3))
-            start_date = datetime(2026, 1, start_day)
-            end_date = datetime(2026, 1, end_day)
-        else:
-            return days_of_week, None, None, 1
-    else:
-        start_month = range_match.group(1)
+        # Pattern 2: MMM##-## (same month, e.g., FEB02-FEB. 28 or JAN15-28)
+        range_match = re.search(r'\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(\d{1,2})-(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\.\s*(\d{1,2})\b', header_line)
+        if not range_match:
+            range_match = re.search(r'\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(\d{1,2})-(\d{1,2})\b', header_line)
+            if range_match:
+                month_str = range_match.group(1)
+                start_day = int(range_match.group(2))
+                end_day = int(range_match.group(3))
+                month_num = month_map[month_str]
+                year = 2025 if month_num >= 10 else 2026
+                
+                try:
+                    start_date = datetime(year, month_num, start_day)
+                    end_date = datetime(year, month_num, end_day)
+                except ValueError:
+                    return days_of_week, None, None, 1
+            else:
+                return days_of_week, None, None, 1
+    
+    if range_match and len(range_match.groups()) == 4:
+        # Cross-month range (e.g., FEB14-MAR. 01)
+        start_month_str = range_match.group(1)
         start_day = int(range_match.group(2))
-        end_month = range_match.group(3)
+        end_month_str = range_match.group(3)
         end_day = int(range_match.group(4))
         
-        start_year = 2025 if start_month == 'DEC' else 2026
-        end_year = 2025 if end_month == 'DEC' else 2026
+        start_month_num = month_map[start_month_str]
+        end_month_num = month_map[end_month_str]
         
-        start_date = datetime(start_year, 12 if start_month == 'DEC' else 1, start_day)
-        end_date = datetime(end_year, 12 if end_month == 'DEC' else 1, end_day)
+        # Determine years
+        start_year = 2025 if start_month_num >= 10 else 2026
+        end_year = 2025 if end_month_num >= 10 else 2026
+        
+        # Handle year rollover (e.g., DEC to JAN)
+        if end_month_num < start_month_num:
+            end_year = start_year + 1
+        
+        try:
+            start_date = datetime(start_year, start_month_num, start_day)
+            end_date = datetime(end_year, end_month_num, end_day)
+        except ValueError:
+            return days_of_week, None, None, 1
+    elif not range_match:
+        return days_of_week, None, None, 1
     
     # Count occurrences
     dow_map = {'MO': 0, 'TU': 1, 'WE': 2, 'TH': 3, 'FR': 4, 'SA': 5, 'SU': 6}
     target_dows = [dow_map[dow] for dow in days_of_week if dow in dow_map]
     
     if not target_dows:
+        # No specific days of week - every day in range
         occurrences = (end_date - start_date).days + 1
         return days_of_week, start_date, end_date, occurrences
     
+    # Count occurrences of specified days of week
     occurrence_dates = []
     current = start_date
     while current <= end_date:
@@ -124,12 +171,18 @@ def get_effective_dates(trip_lines):
     # Handle EXCEPT dates
     if except_line:
         except_dates = []
-        except_matches = re.findall(r'(JAN|DEC)\s+(\d{1,2})', except_line)
-        for month, day in except_matches:
-            year = 2025 if month == 'DEC' else 2026
-            except_date = datetime(year, 12 if month == 'DEC' else 1, int(day))
-            if except_date in occurrence_dates:
-                occurrences -= 1
+        # Find all month-day pairs in except line
+        except_matches = re.findall(r'\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{1,2})\b', except_line)
+        for month_str, day in except_matches:
+            month_num = month_map[month_str]
+            year = 2025 if month_num >= 10 else 2026
+            
+            try:
+                except_date = datetime(year, month_num, int(day))
+                if except_date in occurrence_dates:
+                    occurrences -= 1
+            except ValueError:
+                pass
     
     return days_of_week, start_date, end_date, occurrences
 
