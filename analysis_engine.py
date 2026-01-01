@@ -568,6 +568,40 @@ def get_total_credit(trip_lines):
                             pass
     return None
 
+def get_credit_components(trip_lines):
+    """
+    Extract BL (block) and CR (credit) components from TOTAL CREDIT line
+    Returns dict with 'block' and 'credit' values in decimal hours (for block) and minutes (for credit)
+    
+    Example line: TOTAL CREDIT 10.30TL   7.49BL    2.41CR
+    """
+    components = {'block': None, 'credit': None}
+    
+    for line in trip_lines:
+        if 'TOTAL CREDIT' in line:
+            parts = line.split()
+            for i, part in enumerate(parts):
+                if part.endswith('BL'):
+                    bl_str = part[:-2]
+                    try:
+                        components['block'] = float(bl_str)
+                    except ValueError:
+                        pass
+                elif part.endswith('CR'):
+                    cr_str = part[:-2]
+                    try:
+                        # Convert decimal hours to minutes for filtering
+                        # 2.41 hours = 2 hours 41 minutes = 141 minutes
+                        cr_hours = float(cr_str)
+                        cr_whole_hours = int(cr_hours)
+                        cr_decimal_minutes = int(round((cr_hours - cr_whole_hours) * 100))
+                        components['credit'] = cr_whole_hours * 60 + cr_decimal_minutes
+                    except ValueError:
+                        pass
+            break
+    
+    return components
+
 def has_redeye_flight(flight_legs):
     """
     Check if ANY flight leg is a red-eye
