@@ -652,26 +652,27 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                                 trip_summary = []
                                 
                                 # Get current commutability thresholds from sidebar
-                                # Use the global front_end_time and back_end_time variables
-                                def convert_time_to_minutes(time_str):
-                                    parts = time_str.split(':')
-                                    return int(parts[0]) * 60 + int(parts[1])
+                                def parse_time_to_minutes(time_str):
+                                    """Convert HH:MM to minutes, returns None if invalid"""
+                                    if not time_str or time_str == 'N/A':
+                                        return None
+                                    try:
+                                        parts = time_str.split(':')
+                                        return int(parts[0]) * 60 + int(parts[1])
+                                    except:
+                                        return None
                                 
-                                front_threshold = convert_time_to_minutes(front_end_time)
-                                back_threshold = convert_time_to_minutes(back_end_time)
+                                front_threshold = parse_time_to_minutes(front_end_time)
+                                back_threshold = parse_time_to_minutes(back_end_time)
                                 
-                                # DEBUG: Show what thresholds we're using
-                                st.info(f"🔍 Debug: Using thresholds - Front: {front_end_time} ({front_threshold} min), Back: {back_end_time} ({back_threshold} min)")
-                                
-                                both_ends_count = 0
                                 for trip in filtered_trips[:100]:  # Limit to first 100 to avoid token limits
-                                    # Calculate commutability flags
-                                    front_commutable = trip.get('report_time_minutes') is not None and trip.get('report_time_minutes') >= front_threshold
-                                    back_commutable = trip.get('release_time_minutes') is not None and trip.get('release_time_minutes') <= back_threshold
-                                    both_ends_commutable = front_commutable and back_commutable
+                                    # Calculate commutability flags by parsing time strings
+                                    report_minutes = parse_time_to_minutes(trip.get('report_time'))
+                                    release_minutes = parse_time_to_minutes(trip.get('release_time'))
                                     
-                                    if both_ends_commutable:
-                                        both_ends_count += 1
+                                    front_commutable = report_minutes is not None and front_threshold is not None and report_minutes >= front_threshold
+                                    back_commutable = release_minutes is not None and back_threshold is not None and release_minutes <= back_threshold
+                                    both_ends_commutable = front_commutable and back_commutable
                                     
                                     trip_summary.append({
                                         'trip_number': trip.get('trip_number', 'N/A'),
@@ -696,8 +697,6 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                                         'credit_per_day': trip.get('total_credit', 0) / trip['length'] if trip['length'] > 0 else 0,
                                         'last_day_legs': trip.get('last_day_legs')
                                     })
-                                
-                                st.info(f"🔍 Debug: Found {both_ends_count} both-ends commutable trips in first 100")
                                 
                                 # Call Claude API
                                 client = anthropic.Anthropic(api_key=api_key)
