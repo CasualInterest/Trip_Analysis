@@ -655,6 +655,8 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                                         'trip_number': trip.get('trip_number', 'N/A'),
                                         'base': trip['base'],
                                         'length': f"{trip['length']}-day",
+                                        'days_of_week': trip.get('days_of_week', []),
+                                        'occurrences': trip.get('occurrences', 1),
                                         'report': trip.get('report_time'),
                                         'release': trip.get('release_time'),
                                         'legs': trip['total_legs'],
@@ -680,6 +682,16 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                                         "content": f"""You are analyzing pilot trip scheduling data. Here is the current filtered dataset of {len(filtered_trips)} trips:
 
 {trip_summary}
+
+Each trip includes:
+- days_of_week: Which days of the week this trip operates (e.g., ['MO', 'TU', 'WE', 'TH', 'FR'] means Monday-Friday only, ['SA', 'SU'] means weekends only)
+- occurrences: How many times this trip pattern operates during the bid period
+- Report/release times for commutability analysis (front-end commutable if report >= 10:30, back-end if release <= 18:00)
+
+Common day patterns:
+- Monday-Friday only: days_of_week contains only ['MO', 'TU', 'WE', 'TH', 'FR'] or a subset
+- Weekends only: days_of_week contains only ['SA', 'SU']
+- Every day: days_of_week is empty or contains all 7 days
 
 The user's question is: {user_question}
 

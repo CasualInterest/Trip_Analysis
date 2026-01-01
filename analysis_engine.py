@@ -508,6 +508,9 @@ def extract_detailed_trip_info(trip_lines):
     # Get credit components (BL and CR)
     credit_components = get_credit_components(trip_lines)
     
+    # Get days of week and effective dates
+    days_of_week, start_date, end_date, occurrences = get_effective_dates(trip_lines)
+    
     # Get raw trip text
     raw_text = '\n'.join(trip_lines)
     
@@ -515,6 +518,7 @@ def extract_detailed_trip_info(trip_lines):
         'trip_number': trip_number,
         'base': base,
         'length': length,
+        'days_of_week': days_of_week,  # For AI and filtering
         'report_time': report_time_str,
         'report_time_minutes': report_time_minutes,  # For filtering
         'release_time': release_time_str,
