@@ -650,7 +650,17 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                                 
                                 # Create a summary of the filtered trips
                                 trip_summary = []
+                                
+                                # Get current commutability thresholds from sidebar
+                                front_threshold = time_to_minutes(st.session_state.get('front_commute_time', '10:30'))
+                                back_threshold = time_to_minutes(st.session_state.get('back_commute_time', '18:00'))
+                                
                                 for trip in filtered_trips[:100]:  # Limit to first 100 to avoid token limits
+                                    # Calculate commutability flags
+                                    front_commutable = trip.get('report_time_minutes') is not None and trip.get('report_time_minutes') >= front_threshold
+                                    back_commutable = trip.get('release_time_minutes') is not None and trip.get('release_time_minutes') <= back_threshold
+                                    both_ends_commutable = front_commutable and back_commutable
+                                    
                                     trip_summary.append({
                                         'trip_number': trip.get('trip_number', 'N/A'),
                                         'base': trip['base'],
@@ -659,6 +669,9 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                                         'occurrences': trip.get('occurrences', 1),
                                         'report': trip.get('report_time'),
                                         'release': trip.get('release_time'),
+                                        'front_end_commutable': front_commutable,
+                                        'back_end_commutable': back_commutable,
+                                        'both_ends_commutable': both_ends_commutable,
                                         'legs': trip['total_legs'],
                                         'longest_leg': trip.get('longest_leg'),
                                         'shortest_leg': trip.get('shortest_leg'),
@@ -686,16 +699,18 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
 Each trip includes:
 - days_of_week: Which days of the week this trip operates (e.g., ['MO', 'TU', 'WE', 'TH', 'FR'] means Monday-Friday only, ['SA', 'SU'] means weekends only)
 - occurrences: How many times this trip pattern operates during the bid period
-- Report/release times for commutability analysis (front-end commutable if report >= 10:30, back-end if release <= 18:00)
+- front_end_commutable: True if report time allows commuting in (>= 10:30)
+- back_end_commutable: True if release time allows commuting out (<= 18:00)
+- both_ends_commutable: True if BOTH front and back are commutable
 
 Common day patterns:
-- Monday-Friday only: days_of_week contains only ['MO', 'TU', 'WE', 'TH', 'FR'] or a subset
+- Monday-Friday only: days_of_week contains only ['MO', 'TU', 'WE', 'TH', 'FR'] or subset (no SA or SU)
 - Weekends only: days_of_week contains only ['SA', 'SU']
 - Every day: days_of_week is empty or contains all 7 days
 
 The user's question is: {user_question}
 
-Please provide a helpful, concise answer based on this data. If you're recommending specific trips, include their trip numbers. Format your response clearly with bullet points or tables where appropriate."""
+When counting trips, remember to sum the 'occurrences' field to get total trips. Format your response clearly with bullet points or tables where appropriate."""
                                     }]
                                 )
                                 
