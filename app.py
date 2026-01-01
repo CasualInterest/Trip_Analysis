@@ -660,11 +660,18 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                                 front_threshold = convert_time_to_minutes(front_end_time)
                                 back_threshold = convert_time_to_minutes(back_end_time)
                                 
+                                # DEBUG: Show what thresholds we're using
+                                st.info(f"🔍 Debug: Using thresholds - Front: {front_end_time} ({front_threshold} min), Back: {back_end_time} ({back_threshold} min)")
+                                
+                                both_ends_count = 0
                                 for trip in filtered_trips[:100]:  # Limit to first 100 to avoid token limits
                                     # Calculate commutability flags
                                     front_commutable = trip.get('report_time_minutes') is not None and trip.get('report_time_minutes') >= front_threshold
                                     back_commutable = trip.get('release_time_minutes') is not None and trip.get('release_time_minutes') <= back_threshold
                                     both_ends_commutable = front_commutable and back_commutable
+                                    
+                                    if both_ends_commutable:
+                                        both_ends_count += 1
                                     
                                     trip_summary.append({
                                         'trip_number': trip.get('trip_number', 'N/A'),
@@ -689,6 +696,8 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                                         'credit_per_day': trip.get('total_credit', 0) / trip['length'] if trip['length'] > 0 else 0,
                                         'last_day_legs': trip.get('last_day_legs')
                                     })
+                                
+                                st.info(f"🔍 Debug: Found {both_ends_count} both-ends commutable trips in first 100")
                                 
                                 # Call Claude API
                                 client = anthropic.Anthropic(api_key=api_key)
