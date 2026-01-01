@@ -652,15 +652,13 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                                 trip_summary = []
                                 
                                 # Get current commutability thresholds from sidebar
-                                # Convert time string to minutes
+                                # Use the global front_end_time and back_end_time variables
                                 def convert_time_to_minutes(time_str):
                                     parts = time_str.split(':')
                                     return int(parts[0]) * 60 + int(parts[1])
                                 
-                                front_time_str = st.session_state.get('sidebar_front_time', '10:30')
-                                back_time_str = st.session_state.get('sidebar_back_time', '18:00')
-                                front_threshold = convert_time_to_minutes(front_time_str)
-                                back_threshold = convert_time_to_minutes(back_time_str)
+                                front_threshold = convert_time_to_minutes(front_end_time)
+                                back_threshold = convert_time_to_minutes(back_end_time)
                                 
                                 for trip in filtered_trips[:100]:  # Limit to first 100 to avoid token limits
                                     # Calculate commutability flags
