@@ -665,7 +665,7 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                                 front_threshold = parse_time_to_minutes(front_end_time)
                                 back_threshold = parse_time_to_minutes(back_end_time)
                                 
-                                for trip in filtered_trips[:100]:  # Limit to first 100 to avoid token limits
+                                for trip in filtered_trips[:500]:  # Increased to 500 to capture more trips
                                     # Calculate commutability flags by parsing time strings
                                     report_minutes = parse_time_to_minutes(trip.get('report_time'))
                                     release_minutes = parse_time_to_minutes(trip.get('release_time'))
@@ -682,6 +682,10 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                                         'occurrences': trip.get('occurrences', 1),
                                         'report': trip.get('report_time'),
                                         'release': trip.get('release_time'),
+                                        'report_minutes': report_minutes,  # DEBUG
+                                        'release_minutes': release_minutes,  # DEBUG
+                                        'front_threshold': front_threshold,  # DEBUG
+                                        'back_threshold': back_threshold,  # DEBUG
                                         'front_end_commutable': front_commutable,
                                         'back_end_commutable': back_commutable,
                                         'both_ends_commutable': both_ends_commutable,
@@ -705,16 +709,21 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                                     max_tokens=2000,
                                     messages=[{
                                         "role": "user",
-                                        "content": f"""You are analyzing pilot trip scheduling data. Here is the current filtered dataset of {len(filtered_trips)} trips:
+                                        "content": f"""You are analyzing pilot trip scheduling data. Here is the current filtered dataset (showing first 500 of {len(filtered_trips)} trips):
 
 {trip_summary}
 
 Each trip includes:
 - days_of_week: Which days of the week this trip operates (e.g., ['MO', 'TU', 'WE', 'TH', 'FR'] means Monday-Friday only, ['SA', 'SU'] means weekends only)
 - occurrences: How many times this trip pattern operates during the bid period
-- front_end_commutable: True if report time allows commuting in (>= 10:30)
-- back_end_commutable: True if release time allows commuting out (<= 18:00)
+- report/release: Time strings (HH:MM format)
+- report_minutes/release_minutes: DEBUG - Parsed time in minutes from midnight
+- front_threshold/back_threshold: DEBUG - Threshold values (should be 630 and 1080)
+- front_end_commutable: True if report_minutes >= front_threshold (630 = 10:30)
+- back_end_commutable: True if release_minutes <= back_threshold (1080 = 18:00)
 - both_ends_commutable: True if BOTH front and back are commutable
+
+IMPORTANT: Look at the first trip that has both_ends_commutable = True and show me its report_minutes, release_minutes, front_threshold, and back_threshold values.
 
 Common day patterns:
 - Monday-Friday only: days_of_week contains only ['MO', 'TU', 'WE', 'TH', 'FR'] or subset (no SA or SU)
