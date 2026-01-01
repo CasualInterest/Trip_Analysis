@@ -599,8 +599,9 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
             if has_redeye:
                 filtered_trips = [t for t in filtered_trips if t.get('has_redeye') == True]
             
-            # Display trip count
-            st.markdown(f"**Showing {len(filtered_trips)} trips**")
+            # Display trip count (sum of all occurrences)
+            total_occurrences = sum(trip.get('occurrences', 1) for trip in filtered_trips)
+            st.markdown(f"**Showing {total_occurrences} trips** *({len(filtered_trips)} unique patterns)*")
             
             # AI Chat Section (above the table)
             with st.expander("💬 Ask AI About Your Trips", expanded=False):
