@@ -788,8 +788,8 @@ def analyze_file(file_content, base_filter, front_commute_minutes, back_commute_
         if has_redeye_flight(flight_legs):
             redeye_counts[length] += occurrences
         
-        # Commutability
-        if flight_legs:
+                # Commutability (only for 3+ day trips)
+        if flight_legs and length >= 3:  # Only check commutability for 3+ day trips
             first_dep_time = flight_legs[0][1]
             last_arr_time = flight_legs[-1][3]
             
