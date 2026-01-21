@@ -843,24 +843,35 @@ def analyze_file(file_content, base_filter, front_commute_minutes, back_commute_
     }
     result['redeye_rate'] = sum(redeye_counts.values()) / total_trips * 100 if total_trips > 0 else 0
     
-    # Commutability percentages
-    result['front_commute_pct'] = {
-        length: (commute_front[length] / trip_counts[length] * 100) if trip_counts[length] > 0 else 0
-        for length in range(1, 6)
-    }
-    result['front_commute_rate'] = sum(commute_front.values()) / total_trips * 100 if total_trips > 0 else 0
+        # Commutability percentages (only for 3+ day trips)
+    result['front_commute_pct'] = {}
+    for length in range(1, 6):
+        if length >= 3:
+            result['front_commute_pct'][length] = (commute_front[length] / trip_counts[length] * 100) if trip_counts[length] > 0 else 0
+        else:
+            result['front_commute_pct'][length] = 0  # N/A for 1-2 day trips
     
-    result['back_commute_pct'] = {
-        length: (commute_back[length] / trip_counts[length] * 100) if trip_counts[length] > 0 else 0
-        for length in range(1, 6)
-    }
-    result['back_commute_rate'] = sum(commute_back.values()) / total_trips * 100 if total_trips > 0 else 0
+    # Overall rate only includes 3-5 day trips
+    total_eligible_trips = sum(trip_counts[i] for i in [3, 4, 5])
+    result['front_commute_rate'] = (sum(commute_front[i] for i in [3, 4, 5]) / total_eligible_trips * 100) if total_eligible_trips > 0 else 0
     
-    result['both_commute_pct'] = {
-        length: (commute_both[length] / trip_counts[length] * 100) if trip_counts[length] > 0 else 0
-        for length in range(1, 6)
-    }
-    result['both_commute_rate'] = sum(commute_both.values()) / total_trips * 100 if total_trips > 0 else 0
+    result['back_commute_pct'] = {}
+    for length in range(1, 6):
+        if length >= 3:
+            result['back_commute_pct'][length] = (commute_back[length] / trip_counts[length] * 100) if trip_counts[length] > 0 else 0
+        else:
+            result['back_commute_pct'][length] = 0  # N/A for 1-2 day trips
+    
+    result['back_commute_rate'] = (sum(commute_back[i] for i in [3, 4, 5]) / total_eligible_trips * 100) if total_eligible_trips > 0 else 0
+    
+    result['both_commute_pct'] = {}
+    for length in range(1, 6):
+        if length >= 3:
+            result['both_commute_pct'][length] = (commute_both[length] / trip_counts[length] * 100) if trip_counts[length] > 0 else 0
+        else:
+            result['both_commute_pct'][length] = 0  # N/A for 1-2 day trips
+    
+    result['both_commute_rate'] = (sum(commute_both[i] for i in [3, 4, 5]) / total_eligible_trips * 100) if total_eligible_trips > 0 else 0
     
     return result
 
