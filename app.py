@@ -1522,14 +1522,14 @@ Please provide a helpful, detailed comparison highlighting key differences and p
                 front_end_time,
                 back_end_time
             )
-    
-    st.download_button(
-        label="⬇️ Download PDF Report",
-        data=pdf_bytes,
-        file_name=f"trip_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-        mime="application/pdf",
-        key='pdf_download'
-    )
+            
+            st.download_button(
+                label="⬇️ Download PDF Report",
+                data=pdf_bytes,
+                file_name=f"trip_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                mime="application/pdf",
+                key='pdf_download'
+            )
 
 # Footer
 st.markdown("---")
