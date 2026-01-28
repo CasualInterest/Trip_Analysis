@@ -360,12 +360,27 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
             ])
             
             with tab1:
+                # Calculate percentages for each trip length
+                total_trips = result['total_trips']
+                trip_counts = [result['trip_counts'][i] for i in range(1, 6)]
+                trip_percentages = [(count / total_trips * 100) if total_trips > 0 else 0 for count in trip_counts]
+                
+                # Create bar chart with count and percentage
+                data = pd.DataFrame({
+                    'Length': [f"{i}-day" for i in range(1, 6)],
+                    'Count': trip_counts,
+                    'Percentage': trip_percentages
+                })
+                
                 fig = px.bar(
-                    x=[f"{i}-day" for i in range(1, 6)],
-                    y=[result['trip_counts'][i] for i in range(1, 6)],
-                    labels={'x': 'Trip Length', 'y': 'Number of Trips'},
-                    title='Trip Length Distribution'
+                    data,
+                    x='Length',
+                    y='Count',
+                    labels={'Length': 'Trip Length', 'Count': 'Number of Trips'},
+                    title='Trip Length Distribution',
+                    text=[f"{count}<br>({pct:.1f}%)" for count, pct in zip(trip_counts, trip_percentages)]
                 )
+                fig.update_traces(textposition='outside')
                 st.plotly_chart(fig, use_container_width=True)
             
             with tab2:
