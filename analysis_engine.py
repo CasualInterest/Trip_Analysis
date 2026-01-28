@@ -844,23 +844,29 @@ def analyze_file(file_content, base_filter, front_commute_minutes, back_commute_
     result['redeye_rate'] = sum(redeye_counts.values()) / total_trips * 100 if total_trips > 0 else 0
     
     # Commutability percentages
+    # Calculate the denominator: if short trips excluded, only count 3-5 day trips
+    if include_short_trips_commute:
+        commute_trip_total = total_trips
+    else:
+        commute_trip_total = sum(trip_counts[i] for i in range(3, 6))
+    
     result['front_commute_pct'] = {
         length: (commute_front[length] / trip_counts[length] * 100) if trip_counts[length] > 0 else 0
         for length in range(1, 6)
     }
-    result['front_commute_rate'] = sum(commute_front.values()) / total_trips * 100 if total_trips > 0 else 0
+    result['front_commute_rate'] = sum(commute_front.values()) / commute_trip_total * 100 if commute_trip_total > 0 else 0
     
     result['back_commute_pct'] = {
         length: (commute_back[length] / trip_counts[length] * 100) if trip_counts[length] > 0 else 0
         for length in range(1, 6)
     }
-    result['back_commute_rate'] = sum(commute_back.values()) / total_trips * 100 if total_trips > 0 else 0
+    result['back_commute_rate'] = sum(commute_back.values()) / commute_trip_total * 100 if commute_trip_total > 0 else 0
     
     result['both_commute_pct'] = {
         length: (commute_both[length] / trip_counts[length] * 100) if trip_counts[length] > 0 else 0
         for length in range(1, 6)
     }
-    result['both_commute_rate'] = sum(commute_both.values()) / total_trips * 100 if total_trips > 0 else 0
+    result['both_commute_rate'] = sum(commute_both.values()) / commute_trip_total * 100 if commute_trip_total > 0 else 0
     
     return result
 
