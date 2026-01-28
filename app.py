@@ -255,7 +255,7 @@ if st.session_state.analysis_results:
         # View toggle
         view_mode = st.radio(
             "View Mode",
-            ["Summary", "Detailed Trip Table"],
+            ["Summary", "Year-over-Year", "Detailed Trip Table"],
             horizontal=True,
             key='view_mode_toggle'
         )
@@ -457,6 +457,146 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                 )
                 fig.update_traces(textposition='outside')
                 st.plotly_chart(fig, use_container_width=True)
+        
+        elif view_mode == "Year-over-Year":
+            # YEAR-OVER-YEAR COMPARISON VIEW
+            st.markdown("### 📅 Year-over-Year Comparison")
+            st.markdown("*Compare the same month across different years*")
+            
+            # Group files by month
+            files_by_month = {}
+            for fname, fdata in st.session_state.uploaded_files.items():
+                month = fdata['month']
+                year = fdata['year']
+                
+                if month not in files_by_month:
+                    files_by_month[month] = []
+                
+                files_by_month[month].append({
+                    'fname': fname,
+                    'year': year,
+                    'display_name': fdata['display_name'],
+                    'result': st.session_state.analysis_results.get(fname)
+                })
+            
+            # Sort each month's files by year
+            for month in files_by_month:
+                files_by_month[month].sort(key=lambda x: x['year'])
+            
+            # Display comparison for each month that has multiple years
+            months_with_comparison = {m: files for m, files in files_by_month.items() if len(files) > 1}
+            
+            if not months_with_comparison:
+                st.info("📊 Upload files for the same month from different years to see year-over-year comparisons.\n\nExample: January 2024, January 2025, January 2026")
+            else:
+                for month in ['January', 'February', 'March', 'April', 'May', 'June', 
+                              'July', 'August', 'September', 'October', 'November', 'December']:
+                    if month not in months_with_comparison:
+                        continue
+                    
+                    files = months_with_comparison[month]
+                    st.markdown(f"## {month}")
+                    
+                    # Create tabs for different metrics
+                    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+                        "Trip Length", "Single Leg Last Day", "Credit/Trip",
+                        "Credit/Day", "Commutability", "Red-Eye Trips"
+                    ])
+                    
+                    with tab1:
+                        st.markdown("### Trip Length Distribution")
+                        # Create comparison table
+                        data = []
+                        for file_info in files:
+                            result = file_info['result']
+                            if result:
+                                row = [f"{month} {file_info['year']}"]
+                                for length in range(1, 6):
+                                    count = result['trip_counts'][length]
+                                    pct = (count / result['total_trips'] * 100) if result['total_trips'] > 0 else 0
+                                    row.append(f"{count} ({pct:.1f}%)")
+                                row.append(f"{result['total_trips']} (100%)")
+                                data.append(row)
+                        
+                        df = pd.DataFrame(data, columns=['Year', '1-day', '2-day', '3-day', '4-day', '5-day', 'Total'])
+                        st.dataframe(df, use_container_width=True, hide_index=True)
+                    
+                    with tab2:
+                        st.markdown("### Trips with Single Leg on Last Day")
+                        data = []
+                        for file_info in files:
+                            result = file_info['result']
+                            if result:
+                                row = [f"{month} {file_info['year']}"]
+                                for length in range(1, 6):
+                                    pct = result['single_leg_pct'][length]
+                                    row.append(f"{pct:.1f}%")
+                                data.append(row)
+                        
+                        df = pd.DataFrame(data, columns=['Year', '1-day', '2-day', '3-day', '4-day', '5-day'])
+                        st.dataframe(df, use_container_width=True, hide_index=True)
+                    
+                    with tab3:
+                        st.markdown("### Average Credit per Trip")
+                        data = []
+                        for file_info in files:
+                            result = file_info['result']
+                            if result:
+                                row = [f"{month} {file_info['year']}"]
+                                for length in range(1, 6):
+                                    row.append(f"{result['avg_credit_by_length'][length]:.2f}")
+                                row.append(f"{result['avg_credit_per_trip']:.2f}")
+                                data.append(row)
+                        
+                        df = pd.DataFrame(data, columns=['Year', '1-day', '2-day', '3-day', '4-day', '5-day', 'Overall'])
+                        st.dataframe(df, use_container_width=True, hide_index=True)
+                    
+                    with tab4:
+                        st.markdown("### Average Credit per Day")
+                        data = []
+                        for file_info in files:
+                            result = file_info['result']
+                            if result:
+                                row = [f"{month} {file_info['year']}"]
+                                for length in range(1, 6):
+                                    row.append(f"{result['avg_credit_per_day_by_length'][length]:.2f}")
+                                row.append(f"{result['avg_credit_per_day']:.2f}")
+                                data.append(row)
+                        
+                        df = pd.DataFrame(data, columns=['Year', '1-day', '2-day', '3-day', '4-day', '5-day', 'Overall'])
+                        st.dataframe(df, use_container_width=True, hide_index=True)
+                    
+                    with tab5:
+                        st.markdown("### Commutability (Both Ends)")
+                        data = []
+                        for file_info in files:
+                            result = file_info['result']
+                            if result:
+                                row = [f"{month} {file_info['year']}"]
+                                for length in range(1, 6):
+                                    pct = result['both_commute_pct'][length]
+                                    row.append(f"{pct:.1f}%")
+                                row.append(f"{result['both_commute_rate']:.1f}%")
+                                data.append(row)
+                        
+                        df = pd.DataFrame(data, columns=['Year', '1-day', '2-day', '3-day', '4-day', '5-day', 'Overall'])
+                        st.dataframe(df, use_container_width=True, hide_index=True)
+                    
+                    with tab6:
+                        st.markdown("### Trips Containing Red-Eye Flight")
+                        data = []
+                        for file_info in files:
+                            result = file_info['result']
+                            if result:
+                                row = [f"{month} {file_info['year']}"]
+                                for length in range(1, 6):
+                                    pct = result['redeye_pct'][length]
+                                    row.append(f"{pct:.1f}%")
+                                row.append(f"{result['redeye_rate']:.1f}%")
+                                data.append(row)
+                        
+                        df = pd.DataFrame(data, columns=['Year', '1-day', '2-day', '3-day', '4-day', '5-day', 'Overall'])
+                        st.dataframe(df, use_container_width=True, hide_index=True)
         
         else:
             # DETAILED TRIP TABLE VIEW
