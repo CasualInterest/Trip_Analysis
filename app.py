@@ -1,39 +1,41 @@
-# Code for displaying Trip Length
-import matplotlib.pyplot as plt
+# Updated app.py with Grouped Bar Chart for Trip Length
+
+import plotly.graph_objects as go
 import pandas as pd
 
-# Sample data for demonstration
-trip_lengths = ['Short', 'Medium', 'Long']
-trip_counts = [150, 200, 50]  # Example counts of trips based on lengths
-
-# Calculate percentages
-total_trips = sum(trip_counts)
-percentages = [(count / total_trips) * 100 for count in trip_counts]
+# Sample Data (Replace it with your actual data source)
+trip_data = {
+    'trip_length': ['0-1 miles', '1-2 miles', '2-3 miles', '3+ miles'],
+    'count': [150, 120, 90, 60]
+}
 
 # Create a DataFrame
-trip_data = pd.DataFrame({
-    'Trip Length': trip_lengths,
-    'Count': trip_counts,
-    'Percentage': percentages
-})
+trip_df = pd.DataFrame(trip_data)
 
-# Plotting
-x = range(len(trip_data))  # the label locations
-width = 0.35  # the width of the bars
+# Calculate percentages
+trip_df['percentage'] = (trip_df['count'] / trip_df['count'].sum()) * 100
 
-fig, ax = plt.subplots()
+# Create a grouped bar chart
+fig = go.Figure()
 
-# Create bars for counts and percentages
-bars1 = ax.bar(x, trip_data['Count'], width, label='Count')
-bars2 = ax.bar([p + width for p in x], trip_data['Percentage'], width, label='Percentage')
+fig.add_trace(go.Bar(
+    x=trip_df['trip_length'],
+    y=trip_df['count'],
+    name='Number of Trips'
+))
 
-# Add some text for labels, title and custom x-axis tick labels, etc.
-ax.set_xlabel('Trip Length')
-ax.set_ylabel('Values')
-ax.set_title('Trip Count and Percentage by Trip Length')
-ax.set_xticks([p + width / 2 for p in x])
-ax.set_xticklabels(trip_data['Trip Length'])
-ax.legend()
+fig.add_trace(go.Bar(
+    x=trip_df['trip_length'],
+    y=trip_df['percentage'],
+    name='Percentage of Total Trips'
+))
 
-# Show the plot
-plt.show()
+# Update layout
+fig.update_layout(
+    title='Trip Length Distribution',
+    barmode='group',
+    xaxis_title='Trip Length',
+    yaxis_title='Count / Percentage',
+)
+
+# Show the figureig.show() 
