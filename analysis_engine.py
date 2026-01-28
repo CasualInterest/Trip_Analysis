@@ -45,7 +45,7 @@ def parse_trips(file_content):
     
     return trips
 
-def get_effective_dates(trip_lines):
+def get_effective_dates(trip_lines, bid_year=2026):
     """
     Parse EFFECTIVE date range, days of week, and EXCEPT dates
     Handles all months (JAN, FEB, MAR, APR, MAY, JUN, JUL, AUG, SEP, OCT, NOV, DEC)
@@ -79,8 +79,15 @@ def get_effective_dates(trip_lines):
         day = int(only_match.group(2))
         month_num = month_map[month_str]
         
-        # Determine year - if month is Oct-Dec, it's current year, else next year
-        year = 2025 if month_num >= 10 else 2026
+        # Use the provided bid_year
+        # For Oct-Dec, use bid_year (e.g., Oct 2025 is in 2025)
+        # For Jan-Sep, could be bid_year or bid_year+1 depending on context
+        # Default to bid_year for all months in the bid period
+        if month_num >= 10:
+            year = bid_year
+        else:
+            # Jan-Sep: use bid_year
+            year = bid_year
         
         try:
             date = datetime(year, month_num, day)
@@ -113,7 +120,7 @@ def get_effective_dates(trip_lines):
                 start_day = int(range_match.group(2))
                 end_day = int(range_match.group(3))
                 month_num = month_map[month_str]
-                year = 2025 if month_num >= 10 else 2026
+                year = bid_year  # Use provided bid year
                 
                 try:
                     start_date = datetime(year, month_num, start_day)
@@ -133,9 +140,9 @@ def get_effective_dates(trip_lines):
         start_month_num = month_map[start_month_str]
         end_month_num = month_map[end_month_str]
         
-        # Determine years
-        start_year = 2025 if start_month_num >= 10 else 2026
-        end_year = 2025 if end_month_num >= 10 else 2026
+        # Use provided bid_year
+        start_year = bid_year
+        end_year = bid_year
         
         # Handle year rollover (e.g., DEC to JAN)
         if end_month_num < start_month_num:
@@ -738,7 +745,7 @@ def calculate_release_time(last_arr_time):
     except (ValueError, IndexError):
         return None
 
-def analyze_file(file_content, base_filter, front_commute_minutes, back_commute_minutes, include_short_trips_commute=False):
+def analyze_file(file_content, base_filter, front_commute_minutes, back_commute_minutes, include_short_trips_commute=False, bid_year=2026):
     """
     Main analysis function
     Returns dict with all metrics
@@ -766,7 +773,7 @@ def analyze_file(file_content, base_filter, front_commute_minutes, back_commute_
             continue
         
         # Get occurrences
-        days_of_week, start, end, occurrences = get_effective_dates(trip)
+        days_of_week, start, end, occurrences = get_effective_dates(trip, bid_year)
         length, last_day_legs, flight_legs = determine_trip_length_with_details(trip)
         credit = get_total_credit(trip)
         
@@ -870,7 +877,7 @@ def analyze_file(file_content, base_filter, front_commute_minutes, back_commute_
     
     return result
 
-def get_detailed_trips(file_content, base_filter, bid_month):
+def get_detailed_trips(file_content, base_filter, bid_month, bid_year=2026):
     """
     Extract detailed information for all trips in a file
     Handles split trips (when EFFECTIVE contains previous month)
@@ -936,7 +943,7 @@ def get_detailed_trips(file_content, base_filter, bid_month):
         else:
             # Normal trip (not split)
             # Get occurrences for this trip
-            days_of_week, start, end, occurrences = get_effective_dates(trip)
+            days_of_week, start, end, occurrences = get_effective_dates(trip, bid_year)
             
             # Extract detailed info
             trip_info = extract_detailed_trip_info(trip)

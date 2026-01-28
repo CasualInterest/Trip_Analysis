@@ -81,7 +81,8 @@ if st.session_state.uploaded_files and st.sidebar.button("🔄 Update Analysis",
                 selected_base,
                 front_minutes,
                 back_minutes,
-                include_short_commute
+                include_short_commute,
+                fdata['year']  # Pass the bid year from uploaded file
             )
             st.session_state.analysis_results[fname] = result
         
@@ -231,7 +232,8 @@ if st.session_state.uploaded_files:
                     selected_base,
                     front_minutes,
                     back_minutes,
-                    include_short_commute
+                    include_short_commute,
+                    fdata['year']  # Pass the bid year from uploaded file
                 )
                 st.session_state.analysis_results[fname] = result
             
@@ -470,7 +472,8 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                     detailed_trips = analysis_engine.get_detailed_trips(
                         fdata['content'],
                         selected_base,
-                        bid_month
+                        bid_month,
+                        fdata['year']  # Pass the bid year
                     )
                     st.session_state.detailed_trips[fname] = detailed_trips
             
