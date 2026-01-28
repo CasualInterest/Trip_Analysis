@@ -354,9 +354,9 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                 st.metric("Both Ends Commute", f"{result['both_commute_rate']:.1f}%")
             
             # Charts in tabs
-            tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
                 "Trip Length", "Single Leg Last Day", "Credit/Trip", 
-                "Credit/Day", "Commutability"
+                "Credit/Day", "Commutability", "Red-Eye Trips"
             ])
             
             with tab1:
@@ -420,6 +420,30 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                 })
                 fig = px.bar(data, x='Length', y='Percentage', color='Type',
                             barmode='group', title='Commutability by Trip Length (%)')
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with tab6:
+                # Calculate red-eye counts and percentages by trip length
+                trip_counts = [result['trip_counts'][i] for i in range(1, 6)]
+                redeye_pcts = [result['redeye_pct'][i] for i in range(1, 6)]
+                redeye_counts = [int(trip_counts[i-1] * redeye_pcts[i-1] / 100) for i in range(1, 6)]
+                
+                # Create bar chart with count and percentage
+                data = pd.DataFrame({
+                    'Length': [f"{i}-day" for i in range(1, 6)],
+                    'Count': redeye_counts,
+                    'Percentage': redeye_pcts
+                })
+                
+                fig = px.bar(
+                    data,
+                    x='Length',
+                    y='Count',
+                    labels={'Length': 'Trip Length', 'Count': 'Number of Trips with Red-Eye'},
+                    title='Trips Containing Red-Eye Flight by Trip Length',
+                    text=[f"{count}<br>({pct:.1f}%)" for count, pct in zip(redeye_counts, redeye_pcts)]
+                )
+                fig.update_traces(textposition='outside')
                 st.plotly_chart(fig, use_container_width=True)
         
         else:
@@ -697,10 +721,6 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                                         'occurrences': trip.get('occurrences', 1),
                                         'report': trip.get('report_time'),
                                         'release': trip.get('release_time'),
-                                        'report_minutes': report_minutes,  # DEBUG
-                                        'release_minutes': release_minutes,  # DEBUG
-                                        'front_threshold': front_threshold,  # DEBUG
-                                        'back_threshold': back_threshold,  # DEBUG
                                         'front_end_commutable': front_commutable,
                                         'back_end_commutable': back_commutable,
                                         'both_ends_commutable': both_ends_commutable,
@@ -721,7 +741,7 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                                 client = anthropic.Anthropic(api_key=api_key)
                                 message = client.messages.create(
                                     model="claude-sonnet-4-20250514",
-                                    max_tokens=2000,
+                                    max_tokens=4000,  # Increased from 2000
                                     messages=[{
                                         "role": "user",
                                         "content": f"""You are analyzing pilot trip scheduling data. Here is the current filtered dataset (showing first 500 of {len(filtered_trips)} trips):
@@ -732,13 +752,16 @@ Each trip includes:
 - days_of_week: Which days of the week this trip operates (e.g., ['MO', 'TU', 'WE', 'TH', 'FR'] means Monday-Friday only, ['SA', 'SU'] means weekends only)
 - occurrences: How many times this trip pattern operates during the bid period
 - report/release: Time strings (HH:MM format)
-- report_minutes/release_minutes: DEBUG - Parsed time in minutes from midnight
-- front_threshold/back_threshold: DEBUG - Threshold values (should be 630 and 1080)
 - front_end_commutable: True if report_minutes >= front_threshold (630 = 10:30)
 - back_end_commutable: True if release_minutes <= back_threshold (1080 = 18:00)
 - both_ends_commutable: True if BOTH front and back are commutable
 
-IMPORTANT: Look at the first trip that has both_ends_commutable = True and show me its report_minutes, release_minutes, front_threshold, and back_threshold values.
+CRITICAL FILTERING RULES:
+- "Monday-Friday only" means days_of_week must contain ONLY weekday codes (MO, TU, WE, TH, FR)
+- If days_of_week contains 'SA' or 'SU', the trip is NOT Monday-Friday only
+- Example: ['SA'] = Saturday trip = NOT Monday-Friday
+- Example: ['MO'] = Monday trip = Monday-Friday only ✓
+- Example: ['MO', 'SA'] = Monday and Saturday = NOT Monday-Friday only
 
 Common day patterns:
 - Monday-Friday only: days_of_week contains only ['MO', 'TU', 'WE', 'TH', 'FR'] or subset (no SA or SU)

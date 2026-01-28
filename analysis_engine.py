@@ -1127,6 +1127,23 @@ def generate_pdf_report(analysis_results, uploaded_files, base_filter, front_tim
         data.append(row)
     create_table(data, "5c. Both Ends Commutability")
     
+    # 6. Red-Eye Trips
+    data = [['File', '1-day', '2-day', '3-day', '4-day', '5-day', 'Overall']]
+    for fname in sorted_files:
+        result = analysis_results[fname]
+        display_name = uploaded_files[fname]['display_name']
+        row = [display_name]
+        for length in range(1, 6):
+            total = result['trip_counts'][length]
+            redeye_count = int(total * result['redeye_pct'][length] / 100)
+            pct = result['redeye_pct'][length]
+            row.append(f"{redeye_count}\n({pct:.1f}%)")
+        total_redeye = sum(result['trip_counts'][i] * result['redeye_pct'][i] / 100 for i in range(1, 6))
+        overall_count = int(total_redeye)
+        row.append(f"{overall_count}\n({result['redeye_rate']:.1f}%)")
+        data.append(row)
+    create_table(data, "6. Trips Containing Red-Eye Flight")
+    
     # Add page break before graphs if multiple files
     if num_files >= 2:
         story.append(PageBreak())
