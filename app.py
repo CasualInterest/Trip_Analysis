@@ -684,32 +684,128 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                     key="ai_question"
                 )
                 
-                if st.button("Ask AI", type="primary"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    ask_ai_btn = st.button("Ask AI", type="primary", use_container_width=True)
+                with col2:
+                    quick_calc_btn = st.button("⚡ Quick Calculate", use_container_width=True, help="Fast Python calculation for counting queries (no AI needed)")
+                
+                if quick_calc_btn:
+                    # Quick Python-only calculation for common queries
+                    question_lower = user_question.lower()
+                    asking_commutable = any(word in question_lower for word in ['commutable', 'commute', 'both ends', 'both-ends'])
+                    asking_weekday_only = any(phrase in question_lower for phrase in ['monday-friday', 'weekday', 'no weekend', 'mon-fri', 'm-f', 'weekdays only'])
+                    
+                    if not (asking_commutable and asking_weekday_only):
+                        st.warning("Quick Calculate works best for queries like: 'How many trips are both-ends commutable and operate Monday-Friday only?'")
+                    else:
+                        with st.spinner("Calculating..."):
+                            # Calculate directly in Python (fast!)
+                            def parse_time_to_minutes(time_str):
+                                if not time_str or time_str == 'N/A':
+                                    return None
+                                try:
+                                    parts = time_str.split(':')
+                                    return int(parts[0]) * 60 + int(parts[1])
+                                except:
+                                    return None
+                            
+                            front_threshold = parse_time_to_minutes(front_end_time)
+                            back_threshold = parse_time_to_minutes(back_end_time)
+                            
+                            matching_trips = []
+                            for trip in filtered_trips:
+                                report_min = parse_time_to_minutes(trip.get('report_time'))
+                                release_min = parse_time_to_minutes(trip.get('release_time'))
+                                
+                                front_ok = report_min is not None and front_threshold is not None and report_min >= front_threshold
+                                back_ok = release_min is not None and back_threshold is not None and release_min <= back_threshold
+                                both_ok = front_ok and back_ok
+                                
+                                days = trip.get('days_of_week', [])
+                                weekday_only = 'SA' not in days and 'SU' not in days and len(days) > 0
+                                
+                                if both_ok and weekday_only:
+                                    matching_trips.append(trip)
+                            
+                            # Calculate totals
+                            total_occurrences = sum(t.get('occurrences', 1) for t in matching_trips)
+                            by_length = {}
+                            for trip in matching_trips:
+                                length = trip['length']
+                                by_length[length] = by_length.get(length, 0) + trip.get('occurrences', 1)
+                            
+                            # Display results
+                            st.success("✨ Quick Answer:")
+                            st.markdown(f"""
+**Found {len(matching_trips)} unique trip patterns ({total_occurrences} total occurrences)** that are:
+- ✅ Both-ends commutable (report ≥ {front_end_time}, release ≤ {back_end_time})
+- ✅ Operate Monday-Friday only (no weekends)
+
+**Breakdown by trip length:**
+""")
+                            for length in sorted(by_length.keys()):
+                                count = by_length[length]
+                                st.markdown(f"- **{length}-day trips:** {count} occurrences")
+                            
+                            if len(matching_trips) > 0:
+                                st.markdown(f"\n💡 *Analyzed all {len(filtered_trips)} trips instantly with Python!*")
+                
+                if ask_ai_btn:
                     if not api_key:
                         st.error("Please enter your Anthropic API key first")
                     elif not user_question:
                         st.error("Please enter a question")
                     elif len(filtered_trips) == 0:
                         st.warning("No trips to analyze. Adjust your filters.")
-                    else:
+                    elif len(filtered_trips) > 500:
+                        # Check if user has asked the same question before
+                        question_key = f"ai_question_{user_question.strip().lower()}"
+                        warned_before = st.session_state.get(question_key, False)
+                        
+                        if not warned_before:
+                            # First time asking with >500 trips - show warning
+                            st.warning(f"""
+⚠️ **Large Dataset Warning**
+
+You have **{len(filtered_trips)} trips** to analyze. The AI can only process the first 500 trips, which may miss important data.
+
+**Recommended options:**
+1. **Filter your data** using the sidebar filters (Base, Length, Credit, etc.) to reduce the dataset
+2. **Use ⚡ Quick Calculate** for counting queries (instant and analyzes ALL trips)
+3. **Click "Ask AI" again** to proceed anyway (AI will provide statistical summary instead of listing trips)
+""")
+                            # Mark that we've warned the user for this question
+                            st.session_state[question_key] = True
+                            st.stop()
+                        else:
+                            # User asked again - proceed with statistical summary mode
+                            st.info(f"📊 Analyzing {len(filtered_trips)} trips - providing statistical summary...")
+                    
+                    # If we get here, proceed with AI analysis
+                    if not (len(filtered_trips) > 500 and not st.session_state.get(f"ai_question_{user_question.strip().lower()}", False)):
                         with st.spinner("Analyzing trips..."):
                             try:
                                 # Prepare trip data for AI
                                 import anthropic
                                 
-                                # Create a summary of the filtered trips
-                                trip_summary = []
+                                # Determine mode: detailed or statistical
+                                statistical_mode = len(filtered_trips) > 500
                                 
-                                # Get current commutability thresholds from sidebar
-                                def parse_time_to_minutes(time_str):
-                                    """Convert HH:MM to minutes, returns None if invalid"""
-                                    if not time_str or time_str == 'N/A':
-                                        return None
-                                    try:
-                                        parts = time_str.split(':')
-                                        return int(parts[0]) * 60 + int(parts[1])
-                                    except:
-                                        return None
+                                if not statistical_mode:
+                                    # Standard mode: send trip details
+                                    trip_summary = []
+                                    
+                                    # Get current commutability thresholds from sidebar
+                                    def parse_time_to_minutes(time_str):
+                                        """Convert HH:MM to minutes, returns None if invalid"""
+                                        if not time_str or time_str == 'N/A':
+                                            return None
+                                        try:
+                                            parts = time_str.split(':')
+                                            return int(parts[0]) * 60 + int(parts[1])
+                                        except:
+                                            return None
                                 
                                 front_threshold = parse_time_to_minutes(front_end_time)
                                 back_threshold = parse_time_to_minutes(back_end_time)
@@ -747,14 +843,101 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                                         'last_day_legs': trip.get('last_day_legs')
                                     })
                                 
+                                else:
+                                    # Statistical mode: Calculate stats in Python, send summary to AI
+                                    def parse_time_to_minutes(time_str):
+                                        if not time_str or time_str == 'N/A':
+                                            return None
+                                        try:
+                                            parts = time_str.split(':')
+                                            return int(parts[0]) * 60 + int(parts[1])
+                                        except:
+                                            return None
+                                    
+                                    front_threshold = parse_time_to_minutes(front_end_time)
+                                    back_threshold = parse_time_to_minutes(back_end_time)
+                                    
+                                    # Calculate comprehensive statistics
+                                    stats = {
+                                        'total_trips': len(filtered_trips),
+                                        'total_occurrences': sum(t.get('occurrences', 1) for t in filtered_trips),
+                                        'by_length': {},
+                                        'by_base': {},
+                                        'commutability': {
+                                            'front': 0,
+                                            'back': 0,
+                                            'both': 0
+                                        },
+                                        'weekday_only': 0,
+                                        'weekend_included': 0,
+                                        'avg_credit': sum(t.get('total_credit', 0) for t in filtered_trips) / len(filtered_trips) if filtered_trips else 0,
+                                        'avg_length': sum(t['length'] * t.get('occurrences', 1) for t in filtered_trips) / sum(t.get('occurrences', 1) for t in filtered_trips) if filtered_trips else 0
+                                    }
+                                    
+                                    for trip in filtered_trips:
+                                        length = trip['length']
+                                        base = trip['base']
+                                        occurrences = trip.get('occurrences', 1)
+                                        
+                                        # By length
+                                        if length not in stats['by_length']:
+                                            stats['by_length'][length] = 0
+                                        stats['by_length'][length] += occurrences
+                                        
+                                        # By base
+                                        if base not in stats['by_base']:
+                                            stats['by_base'][base] = 0
+                                        stats['by_base'][base] += occurrences
+                                        
+                                        # Commutability
+                                        report_min = parse_time_to_minutes(trip.get('report_time'))
+                                        release_min = parse_time_to_minutes(trip.get('release_time'))
+                                        
+                                        front_ok = report_min is not None and front_threshold is not None and report_min >= front_threshold
+                                        back_ok = release_min is not None and back_threshold is not None and release_min <= back_threshold
+                                        
+                                        if front_ok:
+                                            stats['commutability']['front'] += occurrences
+                                        if back_ok:
+                                            stats['commutability']['back'] += occurrences
+                                        if front_ok and back_ok:
+                                            stats['commutability']['both'] += occurrences
+                                        
+                                        # Weekday analysis
+                                        days = trip.get('days_of_week', [])
+                                        if 'SA' not in days and 'SU' not in days and len(days) > 0:
+                                            stats['weekday_only'] += occurrences
+                                        elif 'SA' in days or 'SU' in days:
+                                            stats['weekend_included'] += occurrences
+                                    
+                                    trip_summary = stats
+                                
                                 # Call Claude API
                                 client = anthropic.Anthropic(api_key=api_key)
-                                message = client.messages.create(
-                                    model="claude-sonnet-4-20250514",
-                                    max_tokens=4000,  # Increased from 2000
-                                    messages=[{
-                                        "role": "user",
-                                        "content": f"""You are analyzing pilot trip scheduling data. Here is the current filtered dataset (showing first 500 of {len(filtered_trips)} trips):
+                                
+                                if statistical_mode:
+                                    # Statistical mode prompt
+                                    prompt_content = f"""You are analyzing pilot trip scheduling data. The dataset is large ({len(filtered_trips)} trips), so here are comprehensive statistics calculated from ALL trips:
+
+{trip_summary}
+
+Statistics explanation:
+- total_trips: Total unique trip patterns
+- total_occurrences: Total trips when counting each occurrence
+- by_length: Breakdown by trip length (1-5 days)
+- by_base: Breakdown by airline base
+- commutability: Counts of trips that are front/back/both ends commutable (thresholds: front ≥ {front_end_time}, back ≤ {back_end_time})
+- weekday_only: Trips operating Monday-Friday only (no SA or SU)
+- weekend_included: Trips that include Saturday or Sunday
+- avg_credit: Average credit hours per trip
+- avg_length: Average trip length in days
+
+The user's question is: {user_question}
+
+Please analyze these statistics and provide a clear, concise answer. Focus on the numbers and patterns that directly answer the user's question."""
+                                else:
+                                    # Detailed mode prompt
+                                    prompt_content = f"""You are analyzing pilot trip scheduling data. Here is the current filtered dataset (showing first 500 of {len(filtered_trips)} trips):
 
 {trip_summary}
 
@@ -781,6 +964,13 @@ Common day patterns:
 The user's question is: {user_question}
 
 When counting trips, remember to sum the 'occurrences' field to get total trips. Format your response clearly with bullet points or tables where appropriate."""
+                                
+                                message = client.messages.create(
+                                    model="claude-sonnet-4-20250514",
+                                    max_tokens=4000,
+                                    messages=[{
+                                        "role": "user",
+                                        "content": prompt_content
                                     }]
                                 )
                                 
