@@ -738,7 +738,7 @@ def calculate_release_time(last_arr_time):
     except (ValueError, IndexError):
         return None
 
-def analyze_file(file_content, base_filter, front_commute_minutes, back_commute_minutes):
+def analyze_file(file_content, base_filter, front_commute_minutes, back_commute_minutes, include_short_trips_commute=False):
     """
     Main analysis function
     Returns dict with all metrics
@@ -788,8 +788,8 @@ def analyze_file(file_content, base_filter, front_commute_minutes, back_commute_
         if has_redeye_flight(flight_legs):
             redeye_counts[length] += occurrences
         
-        # Commutability
-        if flight_legs:
+        # Commutability (only count trips 3+ days unless include_short_trips_commute is True)
+        if flight_legs and (include_short_trips_commute or length >= 3):
             first_dep_time = flight_legs[0][1]
             last_arr_time = flight_legs[-1][3]
             

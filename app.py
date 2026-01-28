@@ -52,6 +52,14 @@ back_end_time = st.sidebar.selectbox(
     key='sidebar_back_time'
 )
 
+# Checkbox for including short trips in commutability
+include_short_commute = st.sidebar.checkbox(
+    "Include 1-2 Day Trips in Commutability",
+    value=False,
+    key='include_short_commute',
+    help="By default, commutability analysis only includes trips 3+ days. Check this to include 1-2 day trips."
+)
+
 # Base filter
 st.sidebar.subheader("Base Filter")
 base_options = ["All Bases", "ATL", "BOS", "NYC", "DTW", "SLC", "MSP", "SEA", "LAX"]
@@ -72,7 +80,8 @@ if st.session_state.uploaded_files and st.sidebar.button("🔄 Update Analysis",
                 fdata['content'],
                 selected_base,
                 front_minutes,
-                back_minutes
+                back_minutes,
+                include_short_commute
             )
             st.session_state.analysis_results[fname] = result
         
@@ -221,7 +230,8 @@ if st.session_state.uploaded_files:
                     fdata['content'],
                     selected_base,
                     front_minutes,
-                    back_minutes
+                    back_minutes,
+                    include_short_commute
                 )
                 st.session_state.analysis_results[fname] = result
             
