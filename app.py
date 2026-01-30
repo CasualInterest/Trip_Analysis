@@ -1579,3 +1579,4 @@ Please provide a helpful, detailed comparison highlighting key differences and p
 # Footer
 st.markdown("---")
 st.markdown("✈️ Pilot Trip Scheduling Analysis Tool | Upload up to 12 files for comparison")
+st.caption("Version: 64.1 - Added Red-Eye Section to Sequential Mode | 2026-01-30")
