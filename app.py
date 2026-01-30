@@ -1278,6 +1278,9 @@ Please provide a helpful, detailed comparison highlighting key differences and p
                     for l in range(1, 6):
                         row[f'{l}-day'] = f"{r['redeye_pct'][l]:.2f}%"
                     row['Overall'] = f"{r['redeye_rate']:.2f}%"
+                    # Calculate total red-eyes
+                    total_redeye = sum(r['trip_counts'][i] * r['redeye_pct'][i] / 100 for i in range(1, 6))
+                    row['Total Red-Eyes'] = f"{int(total_redeye)}"
                     data.append(row)
                 st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
                 
@@ -1509,6 +1512,48 @@ Please provide a helpful, detailed comparison highlighting key differences and p
                     row[f'{length}-day'] = f"{diff:+.2f} points"
                 overall_diff = r2['both_commute_rate'] - r1['both_commute_rate']
                 row['Overall'] = f"{overall_diff:+.2f} points"
+                diff_data.append(row)
+                st.dataframe(pd.DataFrame(diff_data), use_container_width=True, hide_index=True)
+        
+            st.markdown("---")
+        
+            # 6. RED-EYE TRIPS
+            st.markdown("### 6️⃣ Trips Containing Red-Eye Flight")
+            redeye_data = []
+            for fname in sorted_files:
+                result = st.session_state.analysis_results[fname]
+                display_name = st.session_state.uploaded_files[fname]['display_name']
+                row = {'File': display_name}
+                for length in range(1, 6):
+                    total = result['trip_counts'][length]
+                    redeye_count = int(total * result['redeye_pct'][length] / 100)
+                    pct = result['redeye_pct'][length]
+                    row[f'{length}-day'] = f"{redeye_count} ({pct:.2f}%)"
+                # Overall
+                total_redeye = sum(result['trip_counts'][i] * result['redeye_pct'][i] / 100 for i in range(1, 6))
+                overall_count = int(total_redeye)
+                row['Overall'] = f"{overall_count} ({result['redeye_rate']:.2f}%)"
+                row['Total Red-Eyes'] = f"{overall_count}"
+                redeye_data.append(row)
+            st.dataframe(pd.DataFrame(redeye_data), use_container_width=True, hide_index=True)
+        
+            if show_differences:
+                st.markdown("**Change (Newer - Older):**")
+                diff_data = []
+                r1 = st.session_state.analysis_results[sorted_files[0]]
+                r2 = st.session_state.analysis_results[sorted_files[1]]
+                row = {'Metric': 'Percentage Point Difference'}
+                for length in range(1, 6):
+                    diff = r2['redeye_pct'][length] - r1['redeye_pct'][length]
+                    row[f'{length}-day'] = f"{diff:+.2f} points"
+                # Overall difference
+                overall_diff = r2['redeye_rate'] - r1['redeye_rate']
+                row['Overall'] = f"{overall_diff:+.2f} points"
+                # Absolute count difference
+                total_redeye_1 = sum(r1['trip_counts'][i] * r1['redeye_pct'][i] / 100 for i in range(1, 6))
+                total_redeye_2 = sum(r2['trip_counts'][i] * r2['redeye_pct'][i] / 100 for i in range(1, 6))
+                count_diff = int(total_redeye_2) - int(total_redeye_1)
+                row['Total Red-Eyes'] = f"{count_diff:+d}"
                 diff_data.append(row)
                 st.dataframe(pd.DataFrame(diff_data), use_container_width=True, hide_index=True)
     
