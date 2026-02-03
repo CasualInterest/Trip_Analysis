@@ -366,9 +366,9 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                 st.metric("Both Ends Commute", f"{result['both_commute_rate']:.1f}%")
             
             # Charts in tabs
-            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+            tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
                 "Trip Length", "Single Leg Last Day", "Credit/Trip", 
-                "Credit/Day", "Commutability", "Red-Eye Trips"
+                "Credit/Day", "Commutability", "Red-Eye Trips", "Staffing Heat Map"
             ])
             
             with tab1:
@@ -457,6 +457,87 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                 )
                 fig.update_traces(textposition='outside')
                 st.plotly_chart(fig, use_container_width=True)
+            
+            with tab7:
+                st.markdown("### 📅 Daily Staffing Heat Map")
+                st.caption("Shows the number of pilots working each day of the month based on trip operations")
+                
+                # Generate heat map data
+                with st.spinner("Generating staffing heat map..."):
+                    heatmap_data = analysis_engine.generate_staffing_heatmap(
+                        fdata['content'],
+                        fdata['month'],
+                        fdata['year'],
+                        selected_base
+                    )
+                
+                # Create calendar-style heat map
+                dates = heatmap_data['dates']
+                pilot_counts = heatmap_data['pilot_counts']
+                trip_details = heatmap_data['trip_details']
+                
+                # Format dates for display
+                date_labels = [d.strftime('%b %d') for d in dates]
+                day_names = [d.strftime('%a') for d in dates]
+                day_numbers = [d.day for d in dates]
+                
+                # Create heat map using plotly
+                import plotly.graph_objects as go
+                
+                # Determine color scale max (use 95th percentile to avoid outliers skewing scale)
+                import numpy as np
+                non_zero_counts = [c for c in pilot_counts if c > 0]
+                if non_zero_counts:
+                    color_max = int(np.percentile(non_zero_counts, 95))
+                else:
+                    color_max = 1
+                
+                fig = go.Figure(data=go.Heatmap(
+                    z=[pilot_counts],
+                    x=day_numbers,
+                    y=['Pilots Working'],
+                    text=[trip_details],
+                    hovertemplate='<b>%{x} %{fullData.name}</b><br>Pilots: %{z}<br>%{text}<extra></extra>',
+                    colorscale='Blues',
+                    zmin=0,
+                    zmax=color_max,
+                    colorbar=dict(title="Pilot Count"),
+                    customdata=[[f"{date_labels[i]}<br>{day_names[i]}" for i in range(len(dates))]]
+                ))
+                
+                fig.update_layout(
+                    title=f"Daily Pilot Operations - {heatmap_data['month']} {heatmap_data['year']}",
+                    xaxis_title="Day of Month",
+                    yaxis_title="",
+                    height=250,
+                    xaxis=dict(
+                        tickmode='linear',
+                        tick0=1,
+                        dtick=1
+                    )
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Summary statistics
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Peak Day", f"{max(pilot_counts)} pilots" if pilot_counts else "N/A")
+                with col2:
+                    avg_pilots = sum(pilot_counts) / len(pilot_counts) if pilot_counts else 0
+                    st.metric("Avg Daily", f"{avg_pilots:.1f} pilots")
+                with col3:
+                    days_with_ops = sum(1 for c in pilot_counts if c > 0)
+                    st.metric("Days with Ops", f"{days_with_ops}/{len(pilot_counts)}")
+                with col4:
+                    total_pilot_days = sum(pilot_counts)
+                    st.metric("Total Pilot-Days", total_pilot_days)
+                
+                # Show day with peak operations
+                if pilot_counts:
+                    max_idx = pilot_counts.index(max(pilot_counts))
+                    peak_date = dates[max_idx]
+                    st.info(f"📊 **Peak Operations:** {peak_date.strftime('%A, %B %d, %Y')} with {pilot_counts[max_idx]} pilots working")
         
         else:
             # DETAILED TRIP TABLE VIEW
@@ -1579,4 +1660,4 @@ Please provide a helpful, detailed comparison highlighting key differences and p
 # Footer
 st.markdown("---")
 st.markdown("✈️ Pilot Trip Scheduling Analysis Tool | Upload up to 12 files for comparison")
-st.caption("Version: 64.1 - Added Red-Eye Section to Sequential Mode | 2026-01-30")
+st.caption("Version: 65 - Added Staffing Heat Map Tab | 2026-01-30")

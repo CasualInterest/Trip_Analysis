@@ -193,6 +193,173 @@ def get_effective_dates(trip_lines, bid_year=2026):
     
     return days_of_week, start_date, end_date, occurrences
 
+def generate_staffing_heatmap(file_content, bid_month, bid_year, base_filter="All Bases"):
+    """
+    Generate daily staffing heat map data showing number of pilots working each day
+    Returns dict with dates, pilot counts, and trip details
+    """
+    trips = parse_trips(file_content)
+    
+    # Month name to number mapping
+    month_map = {
+        'January': 1, 'February': 2, 'March': 3, 'April': 4,
+        'May': 5, 'June': 6, 'July': 7, 'August': 8,
+        'September': 9, 'October': 10, 'November': 11, 'December': 12
+    }
+    
+    month_num = month_map.get(bid_month, 1)
+    
+    # Dictionary to store: date -> list of (trip_number, duty_day)
+    date_operations = {}
+    
+    for trip in trips:
+        # Get trip number
+        trip_number = None
+        for line in trip:
+            if line.strip().startswith('#'):
+                match = re.search(r'#(\d+)', line)
+                if match:
+                    trip_number = match.group(1)
+                    break
+        
+        if not trip_number:
+            continue
+        
+        # Apply base filter
+        first_airport = get_first_departure_airport(trip)
+        if not first_airport:
+            continue
+        base = BASE_MAPPING.get(first_airport, 'UNKNOWN')
+        if base_filter != "All Bases" and base != base_filter:
+            continue
+        
+        # Get effective dates and EXCEPT dates
+        header_line = ""
+        except_line = ""
+        for line in trip:
+            if 'EFFECTIVE' in line:
+                header_line = line
+            elif 'EXCEPT' in line and 'EXCPT' not in line:
+                except_line = line
+        
+        if not header_line:
+            continue
+        
+        # Parse days of week
+        dow_pattern = r'\b(MO|TU|WE|TH|FR|SA|SU)\b'
+        days_of_week = re.findall(dow_pattern, header_line)
+        
+        # Get start and end dates
+        days_of_week_parsed, start_date, end_date, _ = get_effective_dates(trip, bid_year)
+        
+        if not start_date or not end_date:
+            continue
+        
+        # Get trip length (number of duty days A, B, C, D, etc.)
+        duty_days = []
+        for line in trip:
+            match = re.match(r'\s+([A-Z])\s+\d+', line)
+            if match:
+                duty_day = match.group(1)
+                if duty_day not in duty_days:
+                    duty_days.append(duty_day)
+        
+        trip_length = len(duty_days)
+        if trip_length == 0:
+            continue
+        
+        # Get all dates this trip operates on
+        dow_map = {'MO': 0, 'TU': 1, 'WE': 2, 'TH': 3, 'FR': 4, 'SA': 5, 'SU': 6}
+        target_dows = [dow_map[dow] for dow in days_of_week_parsed if dow in dow_map]
+        
+        # Collect exception dates
+        except_dates = set()
+        if except_line:
+            month_abbr_map = {
+                'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
+                'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12
+            }
+            except_matches = re.findall(r'\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{1,2})\b', except_line)
+            for month_str, day in except_matches:
+                except_month_num = month_abbr_map[month_str]
+                # Determine year based on month
+                except_year = bid_year if except_month_num >= 10 else bid_year
+                if except_month_num < month_num and month_num >= 10:
+                    except_year = bid_year + 1
+                try:
+                    except_date = datetime(except_year, except_month_num, int(day))
+                    except_dates.add(except_date)
+                except ValueError:
+                    pass
+        
+        # Find all occurrence dates
+        occurrence_dates = []
+        current = start_date
+        while current <= end_date:
+            if not target_dows or current.weekday() in target_dows:
+                if current not in except_dates:
+                    occurrence_dates.append(current)
+            current += timedelta(days=1)
+        
+        # For each occurrence date, add all duty days
+        for occ_date in occurrence_dates:
+            for i, duty_day in enumerate(duty_days):
+                duty_date = occ_date + timedelta(days=i)
+                
+                # Only include dates in the bid month
+                if duty_date.month == month_num and duty_date.year == bid_year:
+                    if duty_date not in date_operations:
+                        date_operations[duty_date] = []
+                    date_operations[duty_date].append({
+                        'trip_number': trip_number,
+                        'duty_day': duty_day,
+                        'trip_length': trip_length
+                    })
+    
+    # Get days in month
+    import calendar
+    days_in_month = calendar.monthrange(bid_year, month_num)[1]
+    
+    # Create arrays for heat map
+    dates = []
+    pilot_counts = []
+    trip_details = []
+    
+    for day in range(1, days_in_month + 1):
+        date = datetime(bid_year, month_num, day)
+        dates.append(date)
+        
+        if date in date_operations:
+            count = len(date_operations[date])
+            pilot_counts.append(count)
+            
+            # Create detail string
+            trip_nums = {}  # trip_number -> list of duty days
+            for op in date_operations[date]:
+                trip_num = op['trip_number']
+                duty_day = op['duty_day']
+                if trip_num not in trip_nums:
+                    trip_nums[trip_num] = []
+                trip_nums[trip_num].append(duty_day)
+            
+            detail_lines = []
+            for trip_num in sorted(trip_nums.keys(), key=lambda x: int(x) if x.isdigit() else 0):
+                duty_days_str = ', '.join(sorted(set(trip_nums[trip_num])))
+                detail_lines.append(f"#{trip_num} ({duty_days_str})")
+            
+            trip_details.append('<br>'.join(detail_lines[:10]))  # Limit to first 10 for readability
+        else:
+            pilot_counts.append(0)
+            trip_details.append("No operations")
+    
+    return {
+        'dates': dates,
+        'pilot_counts': pilot_counts,
+        'trip_details': trip_details,
+        'month': bid_month,
+        'year': bid_year
+    }
+
 def get_previous_month_abbr(bid_month):
     """Get the 3-letter abbreviation for the previous month"""
     prev_month_map = {
