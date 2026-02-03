@@ -477,9 +477,14 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                 trip_details = heatmap_data['trip_details']
                 
                 # Format dates for display
-                date_labels = [d.strftime('%b %d') for d in dates]
-                day_names = [d.strftime('%a') for d in dates]
+                day_names = [d.strftime('%a') for d in dates]  # Mon, Tue, Wed, etc.
                 day_numbers = [d.day for d in dates]
+                
+                # Create x-axis labels with day number and day of week
+                x_labels = [f"{day}<br>{dow}" for day, dow in zip(day_numbers, day_names)]
+                
+                # Create text to display in each cell (the count)
+                cell_text = [[str(count) if count > 0 else "" for count in pilot_counts]]
                 
                 # Create heat map using plotly
                 import plotly.graph_objects as go
@@ -494,26 +499,33 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                 
                 fig = go.Figure(data=go.Heatmap(
                     z=[pilot_counts],
-                    x=day_numbers,
+                    x=x_labels,
                     y=['Pilots Working'],
-                    text=[trip_details],
-                    hovertemplate='<b>%{x} %{fullData.name}</b><br>Pilots: %{z}<br>%{text}<extra></extra>',
+                    text=cell_text,
+                    texttemplate='<b>%{text}</b>',
+                    textfont={"size": 14, "color": "white"},
+                    hovertemplate='<b>Day %{customdata[0]}</b><br>Pilots: %{z}<br><br>%{customdata[1]}<extra></extra>',
                     colorscale='Blues',
                     zmin=0,
                     zmax=color_max,
-                    colorbar=dict(title="Pilot Count"),
-                    customdata=[[f"{date_labels[i]}<br>{day_names[i]}" for i in range(len(dates))]]
+                    colorbar=dict(title="Pilot<br>Count"),
+                    customdata=[[f"{day_numbers[i]} ({day_names[i]})", trip_details[i]] for i in range(len(dates))]
                 ))
                 
                 fig.update_layout(
                     title=f"Daily Pilot Operations - {heatmap_data['month']} {heatmap_data['year']}",
-                    xaxis_title="Day of Month",
+                    xaxis_title="",
                     yaxis_title="",
-                    height=250,
+                    height=300,
                     xaxis=dict(
-                        tickmode='linear',
-                        tick0=1,
-                        dtick=1
+                        tickmode='array',
+                        tickvals=list(range(len(x_labels))),
+                        ticktext=x_labels,
+                        tickangle=0,
+                        side='bottom'
+                    ),
+                    yaxis=dict(
+                        showticklabels=False
                     )
                 )
                 
@@ -1660,4 +1672,4 @@ Please provide a helpful, detailed comparison highlighting key differences and p
 # Footer
 st.markdown("---")
 st.markdown("✈️ Pilot Trip Scheduling Analysis Tool | Upload up to 12 files for comparison")
-st.caption("Version: 65 - Added Staffing Heat Map Tab | 2026-01-30")
+st.caption("Version: 65.1 - Improved Heat Map Display | 2026-01-30")
