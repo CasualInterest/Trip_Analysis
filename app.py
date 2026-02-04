@@ -18,6 +18,58 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Password Protection
+def check_password():
+    """Returns `True` if the user had the correct password."""
+
+    def password_entered():
+        """Checks whether a password entered by the user is correct."""
+        if "APP_PASSWORD" in st.secrets:
+            correct_password = st.secrets["APP_PASSWORD"]
+        else:
+            # Fallback default password if no password set in secrets
+            correct_password = "pilot2026"
+        
+        if st.session_state["password"] == correct_password:
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # Don't store password
+        else:
+            st.session_state["password_correct"] = False
+
+    # First run, show input for password
+    if "password_correct" not in st.session_state:
+        st.markdown("# 🔒 Pilot Trip Scheduling Analysis")
+        st.markdown("### Please enter the password to access the application")
+        st.text_input(
+            "Password", 
+            type="password", 
+            on_change=password_entered, 
+            key="password"
+        )
+        st.info("💡 Contact your administrator for the access password")
+        return False
+    
+    # Password incorrect, show input + error
+    elif not st.session_state["password_correct"]:
+        st.markdown("# 🔒 Pilot Trip Scheduling Analysis")
+        st.markdown("### Please enter the password to access the application")
+        st.text_input(
+            "Password", 
+            type="password", 
+            on_change=password_entered, 
+            key="password"
+        )
+        st.error("😕 Password incorrect. Please try again.")
+        return False
+    
+    # Password correct
+    else:
+        return True
+
+if not check_password():
+    st.stop()  # Don't continue if check_password is not True
+
+# Main application starts here (password verified)
 # Initialize session state
 if 'uploaded_files' not in st.session_state:
     st.session_state.uploaded_files = {}
@@ -550,6 +602,147 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                     max_idx = pilot_counts.index(max(pilot_counts))
                     peak_date = dates[max_idx]
                     st.info(f"📊 **Peak Operations:** {peak_date.strftime('%A, %B %d, %Y')} with {pilot_counts[max_idx]} pilots working")
+                
+                # Reserve Correlation Analysis Section
+                st.markdown("---")
+                st.markdown("### 📊 Reserve vs Operations Correlation Analysis")
+                st.caption("Compare required reserve levels with daily pilot operations to identify staffing patterns")
+                
+                with st.expander("📥 Enter Reserve Data for Correlation Analysis", expanded=False):
+                    st.markdown("""
+                    **Instructions:** Enter the required reserve count for each day to analyze correlation with pilot operations.
+                    
+                    You can find this data in your reserve requirements document/table.
+                    """)
+                    
+                    # Create input fields for reserve data
+                    st.markdown("**Enter Reserve Requirements:**")
+                    
+                    # Option to bulk paste data
+                    bulk_input = st.text_area(
+                        "Paste reserve data (format: date,required or one per line)",
+                        placeholder="Example:\n03FEB,39\n04FEB,40\n05FEB,42\n...",
+                        height=150,
+                        key='reserve_bulk_input'
+                    )
+                    
+                    if st.button("📊 Analyze Reserve Correlation", type="primary"):
+                        if bulk_input.strip():
+                            try:
+                                # Parse the bulk input
+                                reserve_data = {}
+                                month_abbr_map = {
+                                    'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
+                                    'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12
+                                }
+                                
+                                lines = bulk_input.strip().split('\n')
+                                for line in lines:
+                                    line = line.strip()
+                                    if not line or ',' not in line:
+                                        continue
+                                    
+                                    parts = line.split(',')
+                                    if len(parts) >= 2:
+                                        date_str = parts[0].strip().upper()
+                                        required = int(parts[1].strip())
+                                        
+                                        # Parse date (e.g., "03FEB" or "3FEB")
+                                        import re
+                                        match = re.match(r'(\d{1,2})([A-Z]{3})', date_str)
+                                        if match:
+                                            day = int(match.group(1))
+                                            month_abbr = match.group(2)
+                                            month_num = month_abbr_map.get(month_abbr)
+                                            
+                                            if month_num == month_map.get(fdata['month']):
+                                                date_key = datetime(fdata['year'], month_num, day)
+                                                reserve_data[date_key] = required
+                                
+                                if reserve_data:
+                                    # Match reserve data with pilot operations
+                                    matched_dates = []
+                                    reserve_required = []
+                                    pilots_on_duty = []
+                                    
+                                    for date in dates:
+                                        if date in reserve_data:
+                                            matched_dates.append(date)
+                                            reserve_required.append(reserve_data[date])
+                                            pilots_on_duty.append(pilot_counts[dates.index(date)])
+                                    
+                                    if len(matched_dates) >= 3:
+                                        # Calculate correlation
+                                        import numpy as np
+                                        correlation = np.corrcoef(reserve_required, pilots_on_duty)[0, 1]
+                                        
+                                        # Display results
+                                        st.success(f"✅ Analysis complete! Found {len(matched_dates)} matching dates.")
+                                        
+                                        # Correlation coefficient
+                                        col1, col2, col3 = st.columns(3)
+                                        with col1:
+                                            st.metric("Correlation Coefficient", f"{correlation:.3f}")
+                                        with col2:
+                                            strength = "Strong" if abs(correlation) > 0.7 else "Moderate" if abs(correlation) > 0.4 else "Weak"
+                                            st.metric("Relationship Strength", strength)
+                                        with col3:
+                                            direction = "Positive" if correlation > 0 else "Negative"
+                                            st.metric("Direction", direction)
+                                        
+                                        # Interpretation
+                                        if correlation > 0.7:
+                                            interpretation = "🟢 **Strong Positive Correlation**: Days with more pilots on duty strongly correlate with higher reserve requirements. This suggests reserves are scaled appropriately to operational needs."
+                                        elif correlation > 0.4:
+                                            interpretation = "🟡 **Moderate Positive Correlation**: There is a moderate relationship between pilot operations and reserve requirements, but other factors may also influence reserve levels."
+                                        elif correlation > 0:
+                                            interpretation = "🟠 **Weak Positive Correlation**: Only a slight tendency for more reserves on busier days. Reserve planning may be driven by other factors."
+                                        else:
+                                            interpretation = "🔴 **Negative/No Correlation**: Reserve requirements don't align with daily operational levels. This may indicate reserves are planned based on other criteria."
+                                        
+                                        st.info(interpretation)
+                                        
+                                        # Scatter plot
+                                        import plotly.express as px
+                                        scatter_df = pd.DataFrame({
+                                            'Pilots on Duty': pilots_on_duty,
+                                            'Reserves Required': reserve_required,
+                                            'Date': [d.strftime('%b %d') for d in matched_dates],
+                                            'Day of Week': [d.strftime('%a') for d in matched_dates]
+                                        })
+                                        
+                                        fig = px.scatter(
+                                            scatter_df,
+                                            x='Pilots on Duty',
+                                            y='Reserves Required',
+                                            hover_data=['Date', 'Day of Week'],
+                                            title='Reserve Requirements vs Pilot Operations',
+                                            trendline='ols'
+                                        )
+                                        fig.update_traces(marker=dict(size=10))
+                                        st.plotly_chart(fig, use_container_width=True)
+                                        
+                                        # Day-by-day comparison table
+                                        st.markdown("**Day-by-Day Comparison:**")
+                                        comparison_df = pd.DataFrame({
+                                            'Date': [d.strftime('%b %d (%a)') for d in matched_dates],
+                                            'Pilots on Duty': pilots_on_duty,
+                                            'Reserves Required': reserve_required,
+                                            'Ratio (%)': [f"{(res/pilots*100):.1f}%" if pilots > 0 else "N/A" 
+                                                         for res, pilots in zip(reserve_required, pilots_on_duty)]
+                                        })
+                                        st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+                                        
+                                    else:
+                                        st.warning(f"⚠️ Only found {len(matched_dates)} matching dates. Need at least 3 for correlation analysis.")
+                                else:
+                                    st.error("❌ No valid reserve data found. Check your format.")
+                                    
+                            except Exception as e:
+                                st.error(f"❌ Error parsing reserve data: {str(e)}")
+                                st.info("Expected format: 03FEB,39 (one per line)")
+                        else:
+                            st.warning("⚠️ Please enter reserve data to analyze.")
         
         else:
             # DETAILED TRIP TABLE VIEW
@@ -1672,4 +1865,4 @@ Please provide a helpful, detailed comparison highlighting key differences and p
 # Footer
 st.markdown("---")
 st.markdown("✈️ Pilot Trip Scheduling Analysis Tool | Upload up to 12 files for comparison")
-st.caption("Version: 65.1 - Improved Heat Map Display | 2026-01-30")
+st.caption("Version: 66.1 - Password Protection Added | 2026-02-03")
