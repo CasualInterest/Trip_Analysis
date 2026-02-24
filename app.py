@@ -865,11 +865,14 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
             with checkbox_col6:
                 has_redeye = st.checkbox("Has Red-Eye", key='filter_has_redeye')
             
-            # Second row of checkboxes
+            # Second checkbox row
             dh_col1, dh_col2, dh_col3, dh_col4, dh_col5, dh_col6 = st.columns(6)
             with dh_col1:
-                last_leg_dh_filter = st.checkbox("Last Leg DH", key='filter_last_leg_dh',
-                    help="Show only trips where the final flight leg is a deadhead (DH)")
+                last_leg_dh_filter = st.checkbox(
+                    "Last Leg DH",
+                    key='filter_last_leg_dh',
+                    help="Show only trips where the final flight leg is a Deadhead (DH)"
+                )
             
             # Apply filters
             filtered_trips = trips.copy()
@@ -1349,8 +1352,46 @@ When counting trips, remember to sum the 'occurrences' field to get total trips.
                 # Display details for selected trips
                 if selected_indices:
                     st.markdown("---")
-                    st.markdown("### Selected Trip Details")
                     
+                    selected_trip_objects = [filtered_trips[idx] for idx in selected_indices]
+                    
+                    # Header row with export buttons
+                    hdr_col1, hdr_col2, hdr_col3 = st.columns([3, 1, 1])
+                    with hdr_col1:
+                        st.markdown(
+                            f"### ✈️ Selected Trip Details &nbsp;"
+                            f"<span style='font-size:0.85rem;color:grey'>"
+                            f"({len(selected_indices)} trip{'s' if len(selected_indices) != 1 else ''})</span>",
+                            unsafe_allow_html=True
+                        )
+                    with hdr_col2:
+                        try:
+                            pdf_bytes = analysis_engine.generate_selected_trips_pdf(
+                                selected_trip_objects,
+                                display_name=fdata.get('display_name', '')
+                            )
+                            st.download_button(
+                                label="📄 Print / Save PDF",
+                                data=pdf_bytes,
+                                file_name=f"selected_trips_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                                mime="application/pdf",
+                                use_container_width=True,
+                                key='export_selected_pdf'
+                            )
+                        except Exception as e:
+                            st.error(f"PDF error: {e}")
+                    with hdr_col3:
+                        txt_content = analysis_engine.generate_selected_trips_txt(selected_trip_objects)
+                        st.download_button(
+                            label="📋 Export TXT",
+                            data=txt_content.encode('utf-8'),
+                            file_name=f"selected_trips_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                            mime="text/plain",
+                            use_container_width=True,
+                            key='export_selected_txt'
+                        )
+                    
+                    # Trip detail expanders
                     for idx in selected_indices:
                         trip = filtered_trips[idx]
                         trip_num = trip['trip_number']
@@ -1852,8 +1893,8 @@ Please provide a helpful, detailed comparison highlighting key differences and p
                 diff_data.append(row)
                 st.dataframe(pd.DataFrame(diff_data), use_container_width=True, hide_index=True)
     
-        # Export PDF button
-    if st.button("📄 Export PDF Report", key='pdf_export'):
+        # Export PDF button (summary/comparison report)
+    if st.button("📊 Export Summary/Comparison PDF Report", key='pdf_export'):
         with st.spinner("Generating PDF..."):
             pdf_bytes = analysis_engine.generate_pdf_report(
                 st.session_state.analysis_results,
@@ -1874,4 +1915,4 @@ Please provide a helpful, detailed comparison highlighting key differences and p
 # Footer
 st.markdown("---")
 st.markdown("✈️ Pilot Trip Scheduling Analysis Tool | Upload up to 12 files for comparison")
-st.caption("Version: 66.1 - Password Protection Added | 2026-02-03")
+st.caption("Version: 66.2 - Selected Trip PDF Export + Last Leg DH Filter | 2026-02-24")

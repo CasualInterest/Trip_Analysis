@@ -788,40 +788,6 @@ def determine_trip_length_with_details(trip_lines):
     
     return num_days, last_day_legs, flight_legs
 
-def get_last_leg_is_dh(trip_lines):
-    """
-    Return True if the last flight leg of the trip is a deadhead (DH).
-    DH legs have 'DH' appearing on the same line as the airport-time-airport-time pattern,
-    either after the day letter (e.g. 'A DH  3134  ATL 1410  IND 1535+') or
-    as a standalone marker on a continuation leg line.
-    """
-    last_leg_dh = False
-
-    for line in trip_lines:
-        if len(line) < 10:
-            continue
-        parts = line.split()
-        if len(parts) < 4:
-            continue
-
-        # Scan for airport-time-airport-time pattern anywhere on the line
-        for i in range(len(parts) - 3):
-            p1 = parts[i]
-            p2 = parts[i + 1].rstrip('*')
-            p3 = parts[i + 2]
-            p4 = parts[i + 3].rstrip('*')
-
-            if (len(p1) == 3 and p1.isalpha() and p1.isupper() and
-                    len(p2) == 4 and p2.isdigit() and
-                    len(p3) == 3 and p3.isalpha() and p3.isupper() and
-                    len(p4) == 4 and p4.isdigit()):
-                # Found a flight leg line – check for 'DH' anywhere on this line
-                last_leg_dh = 'DH' in parts
-                break  # only one leg pattern per line
-
-    return last_leg_dh
-
-
 def get_total_credit(trip_lines):
     """Extract TOTAL CREDIT value"""
     for line in trip_lines:
@@ -1503,3 +1469,113 @@ def generate_pdf_report(analysis_results, uploaded_files, base_filter, front_tim
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
+
+def get_last_leg_is_dh(trip_lines):
+    """
+    Return True if the last flight leg of the trip is a deadhead (DH).
+    Scans every line with an airport-time-airport-time pattern and checks
+    whether 'DH' appears among the tokens on that same line.
+    """
+    last_leg_dh = False
+    for line in trip_lines:
+        if len(line) < 10:
+            continue
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        for i in range(len(parts) - 3):
+            p1 = parts[i]
+            p2 = parts[i + 1].rstrip('*')
+            p3 = parts[i + 2]
+            p4 = parts[i + 3].rstrip('*')
+            if (len(p1) == 3 and p1.isalpha() and p1.isupper() and
+                    len(p2) == 4 and p2.isdigit() and
+                    len(p3) == 3 and p3.isalpha() and p3.isupper() and
+                    len(p4) == 4 and p4.isdigit()):
+                last_leg_dh = 'DH' in parts
+                break
+    return last_leg_dh
+
+
+def generate_selected_trips_pdf(selected_trips, display_name=""):
+    """
+    Generate a PDF of selected trip raw text blocks using monospace font.
+    Each trip is printed as-is with a header line.
+    """
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        topMargin=0.5 * inch,
+        bottomMargin=0.5 * inch,
+        leftMargin=0.5 * inch,
+        rightMargin=0.5 * inch,
+    )
+    styles = getSampleStyleSheet()
+    story = []
+
+    title_style = ParagraphStyle(
+        'TripTitle', parent=styles['Title'], fontSize=14, spaceAfter=0.15 * inch
+    )
+    header = "Selected Trip Details"
+    if display_name:
+        header += f" \u2013 {display_name}"
+    story.append(Paragraph(header, title_style))
+    story.append(Spacer(1, 0.1 * inch))
+
+    mono_style = ParagraphStyle(
+        'Mono',
+        fontName='Courier',
+        fontSize=8,
+        leading=11,
+        spaceAfter=0.05 * inch,
+        wordWrap='CJK',
+    )
+    divider_style = ParagraphStyle(
+        'Divider',
+        fontName='Courier',
+        fontSize=6,
+        leading=8,
+        textColor=colors.grey,
+        spaceAfter=0.15 * inch,
+    )
+    label_style = ParagraphStyle(
+        'TripLabel',
+        parent=styles['Heading3'],
+        fontSize=9,
+        spaceBefore=0.1 * inch,
+        spaceAfter=0.03 * inch,
+        textColor=colors.HexColor('#1a3a6b'),
+    )
+
+    for trip in selected_trips:
+        trip_num = trip.get('trip_number') or 'N/A'
+        raw = trip.get('raw_text', '')
+
+        story.append(Paragraph(f"Trip #{trip_num}", label_style))
+
+        safe_lines = []
+        for line in raw.split('\n'):
+            line = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            stripped = line.lstrip(' ')
+            num_spaces = len(line) - len(stripped)
+            safe_lines.append('\u00a0' * num_spaces + stripped)
+
+        story.append(Paragraph('<br/>'.join(safe_lines), mono_style))
+        story.append(Paragraph('\u2500' * 80, divider_style))
+
+    doc.build(story)
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    return pdf_bytes
+
+
+def generate_selected_trips_txt(selected_trips):
+    """Return plain text of selected trip raw blocks for download."""
+    parts = []
+    for trip in selected_trips:
+        trip_num = trip.get('trip_number') or 'N/A'
+        raw = trip.get('raw_text', '')
+        parts.append(f"{'='*60}\nTRIP #{trip_num}\n{'='*60}\n{raw}\n")
+    return '\n'.join(parts)
