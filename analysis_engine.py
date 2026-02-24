@@ -1498,72 +1498,139 @@ def get_last_leg_is_dh(trip_lines):
     return last_leg_dh
 
 
-def generate_selected_trips_pdf(selected_trips, display_name=""):
+def generate_selected_trips_pdf(selected_trips, display_name="", settings_text=""):
     """
-    Generate a PDF of selected trip raw text blocks using monospace font.
-    Each trip is printed as-is with a header line.
+    Generate a print-optimised PDF table of selected trips matching the
+    on-screen Detailed Trip Table columns:
+    Trip #, Base, Length, Days, Report, Release, Legs, Longest, Shortest,
+    Credit, Pay, SIT, EDP, HOL, CARVE, Occurs
     """
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer,
-        pagesize=letter,
-        topMargin=0.5 * inch,
-        bottomMargin=0.5 * inch,
-        leftMargin=0.5 * inch,
-        rightMargin=0.5 * inch,
+        pagesize=landscape(letter),
+        topMargin=0.45 * inch,
+        bottomMargin=0.45 * inch,
+        leftMargin=0.4 * inch,
+        rightMargin=0.4 * inch,
     )
     styles = getSampleStyleSheet()
     story = []
 
+    # ── Title ────────────────────────────────────────────────────────────────
     title_style = ParagraphStyle(
-        'TripTitle', parent=styles['Title'], fontSize=14, spaceAfter=0.15 * inch
+        'SelTitle', parent=styles['Title'], fontSize=14, spaceAfter=2
     )
-    header = "Selected Trip Details"
-    if display_name:
-        header += f" \u2013 {display_name}"
-    story.append(Paragraph(header, title_style))
+    sub_style = ParagraphStyle(
+        'SelSub', parent=styles['Normal'], fontSize=8,
+        textColor=colors.HexColor('#555555'), spaceAfter=8
+    )
+    story.append(Paragraph(
+        f"Selected Trips – {display_name}" if display_name else "Selected Trips",
+        title_style
+    ))
+    if settings_text:
+        story.append(Paragraph(settings_text, sub_style))
+    story.append(Spacer(1, 0.05 * inch))
+
+    # ── Column definitions ────────────────────────────────────────────────────
+    # Total usable width in landscape letter minus margins = 10 - 0.8 = 9.2 inch
+    col_defs = [
+        ("Trip #",    0.52),
+        ("Base",      0.35),
+        ("Length",    0.42),
+        ("Days",      0.60),
+        ("Report",    0.45),
+        ("Release",   0.45),
+        ("Legs",      0.32),
+        ("Longest",   0.45),
+        ("Shortest",  0.45),
+        ("Credit",    0.45),
+        ("Pay",       0.45),
+        ("SIT",       0.38),
+        ("EDP",       0.38),
+        ("HOL",       0.38),
+        ("CARVE",     0.42),
+        ("Occurs",    0.40),
+    ]
+    col_widths = [w * inch for _, w in col_defs]
+    headers = [name for name, _ in col_defs]
+
+    def fmt(val, decimals=2):
+        if val is None:
+            return ""
+        try:
+            f = float(val)
+            return f"{f:.{decimals}f}"
+        except (TypeError, ValueError):
+            return str(val)
+
+    # ── Rows ──────────────────────────────────────────────────────────────────
+    rows = [headers]
+    for t in selected_trips:
+        days_str = '/'.join(t.get('days_of_week', [])) if t.get('days_of_week') else ''
+        rows.append([
+            str(t.get('trip_number') or 'N/A'),
+            str(t.get('base') or ''),
+            f"{t.get('length', '')}-day",
+            days_str,
+            str(t.get('report_time') or ''),
+            str(t.get('release_time') or ''),
+            str(t.get('total_legs') or ''),
+            str(t.get('longest_leg') or ''),
+            str(t.get('shortest_leg') or ''),
+            fmt(t.get('total_credit')),
+            fmt(t.get('total_pay')),
+            fmt(t.get('sit')),
+            fmt(t.get('edp')),
+            fmt(t.get('hol')),
+            fmt(t.get('carve')),
+            str(t.get('occurrences', 1)),
+        ])
+
+    # ── Table style ───────────────────────────────────────────────────────────
+    header_bg   = colors.HexColor('#1a3a6b')
+    alt_row_bg  = colors.HexColor('#eef2f8')
+    border_col  = colors.HexColor('#aaaaaa')
+
+    tbl_style = TableStyle([
+        # Header
+        ('BACKGROUND',    (0, 0), (-1, 0),  header_bg),
+        ('TEXTCOLOR',     (0, 0), (-1, 0),  colors.white),
+        ('FONTNAME',      (0, 0), (-1, 0),  'Helvetica-Bold'),
+        ('FONTSIZE',      (0, 0), (-1, 0),  7),
+        ('BOTTOMPADDING', (0, 0), (-1, 0),  4),
+        ('TOPPADDING',    (0, 0), (-1, 0),  4),
+        # Data rows
+        ('FONTNAME',      (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE',      (0, 1), (-1, -1), 7),
+        ('TOPPADDING',    (0, 1), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
+        # Alignment
+        ('ALIGN',         (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
+        # Grid
+        ('GRID',          (0, 0), (-1, -1), 0.4, border_col),
+        ('LINEBELOW',     (0, 0), (-1, 0),  1.0, colors.white),
+    ])
+
+    # Alternating row colours
+    for row_idx in range(1, len(rows)):
+        if row_idx % 2 == 0:
+            tbl_style.add('BACKGROUND', (0, row_idx), (-1, row_idx), alt_row_bg)
+
+    tbl = Table(rows, colWidths=col_widths, repeatRows=1)
+    tbl.setStyle(tbl_style)
+    story.append(tbl)
+
+    # ── Footer count ─────────────────────────────────────────────────────────
     story.append(Spacer(1, 0.1 * inch))
-
-    mono_style = ParagraphStyle(
-        'Mono',
-        fontName='Courier',
-        fontSize=8,
-        leading=11,
-        spaceAfter=0.05 * inch,
-        wordWrap='CJK',
-    )
-    divider_style = ParagraphStyle(
-        'Divider',
-        fontName='Courier',
-        fontSize=6,
-        leading=8,
-        textColor=colors.grey,
-        spaceAfter=0.15 * inch,
-    )
-    label_style = ParagraphStyle(
-        'TripLabel',
-        parent=styles['Heading3'],
-        fontSize=9,
-        spaceBefore=0.1 * inch,
-        spaceAfter=0.03 * inch,
-        textColor=colors.HexColor('#1a3a6b'),
-    )
-
-    for trip in selected_trips:
-        trip_num = trip.get('trip_number') or 'N/A'
-        raw = trip.get('raw_text', '')
-
-        story.append(Paragraph(f"Trip #{trip_num}", label_style))
-
-        safe_lines = []
-        for line in raw.split('\n'):
-            line = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-            stripped = line.lstrip(' ')
-            num_spaces = len(line) - len(stripped)
-            safe_lines.append('\u00a0' * num_spaces + stripped)
-
-        story.append(Paragraph('<br/>'.join(safe_lines), mono_style))
-        story.append(Paragraph('\u2500' * 80, divider_style))
+    total_occ = sum(t.get('occurrences', 1) for t in selected_trips)
+    story.append(Paragraph(
+        f"{len(selected_trips)} unique trip pattern(s) · {total_occ} total occurrence(s)",
+        ParagraphStyle('Footer', parent=styles['Normal'], fontSize=7,
+                       textColor=colors.grey)
+    ))
 
     doc.build(story)
     pdf_bytes = buffer.getvalue()

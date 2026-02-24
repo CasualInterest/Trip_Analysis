@@ -865,7 +865,7 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
             with checkbox_col6:
                 has_redeye = st.checkbox("Has Red-Eye", key='filter_has_redeye')
             
-            # Second checkbox row
+            # Second checkbox row for additional filters
             dh_col1, dh_col2, dh_col3, dh_col4, dh_col5, dh_col6 = st.columns(6)
             with dh_col1:
                 last_leg_dh_filter = st.checkbox(
@@ -1355,20 +1355,31 @@ When counting trips, remember to sum the 'occurrences' field to get total trips.
                     
                     selected_trip_objects = [filtered_trips[idx] for idx in selected_indices]
                     
+                    # Build settings string for PDF header
+                    pdf_settings = (
+                        f"Base: {selected_base}  |  "
+                        f"Front-End: ≥{front_end_time}  |  "
+                        f"Back-End: ≤{back_end_time}  |  "
+                        f"{fdata.get('display_name', '')}"
+                    )
+                    
                     # Header row with export buttons
                     hdr_col1, hdr_col2, hdr_col3 = st.columns([3, 1, 1])
                     with hdr_col1:
+                        total_sel_occ = sum(t.get('occurrences', 1) for t in selected_trip_objects)
                         st.markdown(
                             f"### ✈️ Selected Trip Details &nbsp;"
                             f"<span style='font-size:0.85rem;color:grey'>"
-                            f"({len(selected_indices)} trip{'s' if len(selected_indices) != 1 else ''})</span>",
+                            f"({len(selected_indices)} pattern{'s' if len(selected_indices) != 1 else ''}, "
+                            f"{total_sel_occ} occurrence{'s' if total_sel_occ != 1 else ''})</span>",
                             unsafe_allow_html=True
                         )
                     with hdr_col2:
                         try:
                             pdf_bytes = analysis_engine.generate_selected_trips_pdf(
                                 selected_trip_objects,
-                                display_name=fdata.get('display_name', '')
+                                display_name=fdata.get('display_name', ''),
+                                settings_text=pdf_settings
                             )
                             st.download_button(
                                 label="📄 Print / Save PDF",
@@ -1383,7 +1394,7 @@ When counting trips, remember to sum the 'occurrences' field to get total trips.
                     with hdr_col3:
                         txt_content = analysis_engine.generate_selected_trips_txt(selected_trip_objects)
                         st.download_button(
-                            label="📋 Export TXT",
+                            label="📋 Export Raw TXT",
                             data=txt_content.encode('utf-8'),
                             file_name=f"selected_trips_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
                             mime="text/plain",
@@ -1391,11 +1402,10 @@ When counting trips, remember to sum the 'occurrences' field to get total trips.
                             key='export_selected_txt'
                         )
                     
-                    # Trip detail expanders
+                    # Trip raw-text expanders below the export buttons
                     for idx in selected_indices:
                         trip = filtered_trips[idx]
                         trip_num = trip['trip_number']
-                        
                         with st.expander(f"Trip #{trip_num} - Full Details", expanded=True):
                             st.code(trip['raw_text'], language=None)
             else:
@@ -1893,7 +1903,7 @@ Please provide a helpful, detailed comparison highlighting key differences and p
                 diff_data.append(row)
                 st.dataframe(pd.DataFrame(diff_data), use_container_width=True, hide_index=True)
     
-        # Export PDF button (summary/comparison report)
+        # Export PDF button (summary/comparison statistics report)
     if st.button("📊 Export Summary/Comparison PDF Report", key='pdf_export'):
         with st.spinner("Generating PDF..."):
             pdf_bytes = analysis_engine.generate_pdf_report(
@@ -1915,4 +1925,4 @@ Please provide a helpful, detailed comparison highlighting key differences and p
 # Footer
 st.markdown("---")
 st.markdown("✈️ Pilot Trip Scheduling Analysis Tool | Upload up to 12 files for comparison")
-st.caption("Version: 66.2 - Selected Trip PDF Export + Last Leg DH Filter | 2026-02-24")
+st.caption("Version: 66.2 - Selected Trip Table PDF + Last Leg DH Filter | 2026-02-24")
