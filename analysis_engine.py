@@ -679,6 +679,9 @@ def extract_detailed_trip_info(trip_lines):
     # Check if trip has red-eye
     has_redeye = has_redeye_flight(flight_legs)
     
+    # Check if last leg is a deadhead
+    last_leg_dh = get_last_leg_is_dh(trip_lines)
+    
     # Get credit components (BL and CR)
     credit_components = get_credit_components(trip_lines)
     
@@ -705,6 +708,7 @@ def extract_detailed_trip_info(trip_lines):
         'credit_minutes': credit_components['credit'],  # CR in minutes for filtering
         'block_hours': credit_components['block'],  # BL in hours for reference
         'has_redeye': has_redeye,  # For filtering
+        'last_leg_dh': last_leg_dh,  # For filtering
         'total_pay': pay_data['total_pay'],
         'sit': pay_data['sit'],
         'edp': pay_data['edp'],
@@ -783,6 +787,40 @@ def determine_trip_length_with_details(trip_lines):
             pass
     
     return num_days, last_day_legs, flight_legs
+
+def get_last_leg_is_dh(trip_lines):
+    """
+    Return True if the last flight leg of the trip is a deadhead (DH).
+    DH legs have 'DH' appearing on the same line as the airport-time-airport-time pattern,
+    either after the day letter (e.g. 'A DH  3134  ATL 1410  IND 1535+') or
+    as a standalone marker on a continuation leg line.
+    """
+    last_leg_dh = False
+
+    for line in trip_lines:
+        if len(line) < 10:
+            continue
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+
+        # Scan for airport-time-airport-time pattern anywhere on the line
+        for i in range(len(parts) - 3):
+            p1 = parts[i]
+            p2 = parts[i + 1].rstrip('*')
+            p3 = parts[i + 2]
+            p4 = parts[i + 3].rstrip('*')
+
+            if (len(p1) == 3 and p1.isalpha() and p1.isupper() and
+                    len(p2) == 4 and p2.isdigit() and
+                    len(p3) == 3 and p3.isalpha() and p3.isupper() and
+                    len(p4) == 4 and p4.isdigit()):
+                # Found a flight leg line – check for 'DH' anywhere on this line
+                last_leg_dh = 'DH' in parts
+                break  # only one leg pattern per line
+
+    return last_leg_dh
+
 
 def get_total_credit(trip_lines):
     """Extract TOTAL CREDIT value"""

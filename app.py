@@ -837,7 +837,7 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                     keys_to_delete = ['filter_trip_length', 'filter_report_start', 'filter_report_end', 
                                      'filter_release_start', 'filter_release_end', 'filter_search', 'filter_num_legs', 'filter_credit',
                                      'filter_one_leg_home', 'filter_has_sit', 'filter_has_edp', 
-                                     'filter_has_hol', 'filter_has_carve', 'filter_has_redeye']
+                                     'filter_has_hol', 'filter_has_carve', 'filter_has_redeye', 'filter_last_leg_dh']
                     for key in keys_to_delete:
                         if key in st.session_state:
                             del st.session_state[key]
@@ -864,6 +864,12 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
             
             with checkbox_col6:
                 has_redeye = st.checkbox("Has Red-Eye", key='filter_has_redeye')
+            
+            # Second row of checkboxes
+            dh_col1, dh_col2, dh_col3, dh_col4, dh_col5, dh_col6 = st.columns(6)
+            with dh_col1:
+                last_leg_dh_filter = st.checkbox("Last Leg DH", key='filter_last_leg_dh',
+                    help="Show only trips where the final flight leg is a deadhead (DH)")
             
             # Apply filters
             filtered_trips = trips.copy()
@@ -936,6 +942,9 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
             
             if has_redeye:
                 filtered_trips = [t for t in filtered_trips if t.get('has_redeye') == True]
+            
+            if last_leg_dh_filter:
+                filtered_trips = [t for t in filtered_trips if t.get('last_leg_dh') == True]
             
             # Display trip count (sum of all occurrences)
             total_occurrences = sum(trip.get('occurrences', 1) for trip in filtered_trips)
