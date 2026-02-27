@@ -2019,7 +2019,7 @@ def _create_top20_fig(base, legs_data, display_name):
 
     title_top = 1.0 - MARGIN_TB
     fig.text(0.5, title_top,
-             f"{base_label} - Top 25 Longest Legs (Sorted by Block Time)",
+             f"{base_label} - Top 25 Longest Legs (Sorted by Frequency)",
              ha='center', va='top', fontsize=12, fontweight='bold', color='#333333')
     fig.text(0.5, title_top - 0.038, display_name,
              ha='center', va='top', fontsize=8, color='#777777')
