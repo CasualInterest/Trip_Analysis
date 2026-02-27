@@ -1952,4 +1952,4 @@ Please provide a helpful, detailed comparison highlighting key differences and p
 # Footer
 st.markdown("---")
 st.markdown("✈️ Pilot Trip Scheduling Analysis Tool | Upload up to 12 files for comparison")
-st.caption("Version: 66.3 - Comprehensive Base Report + Top-20 Longest Legs | 2026-02-25")
+st.caption("Version: 66.4 - Top-25 Longest Legs Sorted by Block Time | 2026-02-27")
