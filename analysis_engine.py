@@ -1703,7 +1703,7 @@ def get_all_flight_legs_with_block(trip_lines):
 
 def get_base_top20_legs(file_content, base, bid_year=2026):
     """
-    Get top-20 legs sorted by frequency.
+    Get top-25 legs sorted by block time (longest first).
     For a specific base: all legs departing from that base's airports (anywhere in trip).
     For 'All Bases': all legs across the entire file.
     Returns dict with 'legs' list and summary stats.
@@ -1736,11 +1736,15 @@ def get_base_top20_legs(file_content, base, bid_year=2026):
                     'total': 0,
                     'by_base': {},
                 }
+            # Keep the max block time seen for this route
+            if block_minutes > route_data[route]['block_minutes']:
+                route_data[route]['block_minutes'] = block_minutes
+                route_data[route]['block_str'] = block_str
             route_data[route]['total'] += occurrences
             bd = route_data[route]['by_base']
             bd[trip_base] = bd.get(trip_base, 0) + occurrences
 
-    top20 = sorted(route_data.items(), key=lambda x: x[1]['total'], reverse=True)[:25]
+    top20 = sorted(route_data.items(), key=lambda x: x[1]['block_minutes'], reverse=True)[:25]
 
     legs_result = []
     total_top20 = 0
@@ -2015,7 +2019,7 @@ def _create_top20_fig(base, legs_data, display_name):
 
     title_top = 1.0 - MARGIN_TB
     fig.text(0.5, title_top,
-             f"{base_label} - Top 25 Longest Legs (Sorted by Frequency)",
+             f"{base_label} - Top 25 Longest Legs (Sorted by Block Time)",
              ha='center', va='top', fontsize=12, fontweight='bold', color='#333333')
     fig.text(0.5, title_top - 0.038, display_name,
              ha='center', va='top', fontsize=8, color='#777777')
