@@ -1740,7 +1740,7 @@ def get_base_top20_legs(file_content, base, bid_year=2026):
             bd = route_data[route]['by_base']
             bd[trip_base] = bd.get(trip_base, 0) + occurrences
 
-    top20 = sorted(route_data.items(), key=lambda x: x[1]['total'], reverse=True)[:20]
+    top20 = sorted(route_data.items(), key=lambda x: x[1]['total'], reverse=True)[:25]
 
     legs_result = []
     total_top20 = 0
@@ -1822,114 +1822,151 @@ def _create_summary_fig(base, result, display_name, front_str, back_str):
     fig = plt.figure(figsize=(11, 8.5))
     fig.patch.set_facecolor('white')
 
-    # Title and subtitle
-    fig.text(0.5, 0.977, f"{base_label} – Trip Scheduling Analysis",
-             ha='center', va='top', fontsize=13, fontweight='bold', color=color)
-    fig.text(0.5, 0.953,
-             f"{display_name}  ·  Front-End ≥{front_str}  ·  Back-End ≤{back_str}",
-             ha='center', va='top', fontsize=8.5, color='#666666')
+    # Standard print-safe margins: 0.5" on all sides
+    # 0.5/11 = 0.0455 LR,  0.5/8.5 = 0.0588 TB
+    MARGIN_LR = 0.046
+    MARGIN_TB = 0.060
 
-    # Key metrics bar
-    bax = fig.add_axes([0.03, 0.908, 0.94, 0.038])
+    # Title block (top)
+    fig.text(0.5, 1.0 - MARGIN_TB, f"{base_label} - Trip Scheduling Analysis",
+             ha='center', va='top', fontsize=13, fontweight='bold', color=color)
+    fig.text(0.5, 1.0 - MARGIN_TB - 0.042,
+             f"{display_name}  |  Front-End >= {front_str}  |  Back-End <= {back_str}",
+             ha='center', va='top', fontsize=8, color='#555555')
+
+    # Key metrics bar — spans ONLY the left table column width
+    # so it never overlaps the chart area
+    BAR_TOP = 1.0 - MARGIN_TB - 0.088
+    BAR_H   = 0.055
+    BAR_BOT = BAR_TOP - BAR_H
+    bax = fig.add_axes([MARGIN_LR, BAR_BOT, 1 - 2 * MARGIN_LR, BAR_H])
     bax.set_facecolor(color)
     bax.axis('off')
     metrics = [
-        ('Total Trips', f"{result['total_trips']}"),
-        ('Avg Length', f"{result['avg_trip_length']:.2f}d"),
-        ('Avg Cr/Trip', f"{result['avg_credit_per_trip']:.2f}h"),
-        ('Avg Cr/Day', f"{result['avg_credit_per_day']:.2f}h"),
+        ('Total Trips',   f"{result['total_trips']}"),
+        ('Avg Length',    f"{result['avg_trip_length']:.2f} d"),
+        ('Avg Cr/Trip',   f"{result['avg_credit_per_trip']:.2f} h"),
+        ('Avg Cr/Day',    f"{result['avg_credit_per_day']:.2f} h"),
         ('Front Commute', f"{result['front_commute_rate']:.1f}%"),
-        ('Back Commute', f"{result['back_commute_rate']:.1f}%"),
-        ('Both Ends', f"{result['both_commute_rate']:.1f}%"),
+        ('Back Commute',  f"{result['back_commute_rate']:.1f}%"),
+        ('Both Ends',     f"{result['both_commute_rate']:.1f}%"),
     ]
     for i, (lbl, val) in enumerate(metrics):
         x = (i + 0.5) / len(metrics)
-        bax.text(x, 0.68, val, ha='center', va='center', fontsize=9,
+        bax.text(x, 0.68, val, ha='center', va='center', fontsize=9.5,
                  fontweight='bold', color='white', transform=bax.transAxes)
-        bax.text(x, 0.22, lbl, ha='center', va='center', fontsize=5.8,
-                 color='#ccddee', transform=bax.transAxes)
+        bax.text(x, 0.18, lbl, ha='center', va='center', fontsize=6.5,
+                 color='#cce0f5', transform=bax.transAxes)
 
-    # Layout constants
-    AREA_TOP = 0.897
-    AREA_BOT = 0.022
-    AREA_H = AREA_TOP - AREA_BOT
+    # Content area: starts below metrics bar, ends at bottom margin
+    # Extra gap so charts never clip the bar
+    AREA_TOP = BAR_BOT - 0.015
+    AREA_BOT = MARGIN_TB
+    AREA_H   = AREA_TOP - AREA_BOT
 
-    L_LEFT, L_RIGHT = 0.025, 0.495
-    L_W = L_RIGHT - L_LEFT
-    R_LEFT, R_RIGHT = 0.515, 0.975
+    # Left tables (55% of printable width)
+    L_LEFT  = MARGIN_LR
+    L_RIGHT = MARGIN_LR + (1.0 - 2 * MARGIN_LR) * 0.48
+    L_W     = L_RIGHT - L_LEFT
 
-    GAP = AREA_H * 0.018
-    T_TITLE_H = AREA_H * 0.030
+    # Right charts start with a small gap after tables
+    R_LEFT  = L_RIGHT + 0.06
+    R_RIGHT = 1.0 - MARGIN_LR
 
-    # Table specs: (height_frac, title, headers, rows_lambda)
+    # Table specs (title, height_fraction, headers, row_fn)
+    # Heights must sum to <= 1.0 accounting for gaps
+    GAP     = 0.008          # gap between tables (figure fraction)
+    T_LBL_H = 0.018          # height reserved for title label
+
     table_specs = [
-        (0.150, 'Trip Length Distribution',
+        ('Trip Length Distribution',
+         0.170,
          ['', '1-day', '2-day', '3-day', '4-day', '5-day', 'Total'],
          lambda r: [[
-             'Count(%)',
-             *[f"{r['trip_counts'][i]}\n({r['trip_counts'][i]/max(r['total_trips'],1)*100:.0f}%)"
+             'Count (%)',
+             *[f"{r['trip_counts'][i]}  ({r['trip_counts'][i]/max(r['total_trips'],1)*100:.0f}%)"
                for i in range(1, 6)],
              str(r['total_trips']),
          ]]),
-        (0.115, 'Single Leg on Last Day',
-         ['', '1-day', '2-day', '3-day', '4-day', '5-day'],
-         lambda r: [['%', *[f"{r['single_leg_pct'][i]:.1f}%" for i in range(1, 6)]]]),
-        (0.115, 'Average Credit per Trip (hrs)',
+        ('Single Leg on Last Day',
+         0.115,
+         ['', '1-day', '2-day', '3-day', '4-day', '5-day', 'Overall'],
+         lambda r: [['%',
+                     *[f"{r['single_leg_pct'][i]:.1f}%" for i in range(1, 6)],
+                     f"{sum(r['trip_counts'][i]*r['single_leg_pct'][i] for i in range(1,6)) / max(sum(r['trip_counts'][i] for i in range(1,6)),1):.1f}%"]]),
+        ('Average Credit per Trip (hrs)',
+         0.115,
          ['', '1-day', '2-day', '3-day', '4-day', '5-day', 'Overall'],
          lambda r: [['Hrs',
                      *[f"{r['avg_credit_by_length'][i]:.2f}" for i in range(1, 6)],
                      f"{r['avg_credit_per_trip']:.2f}"]]),
-        (0.115, 'Average Credit per Day (hrs/day)',
+        ('Average Credit per Day (hrs/day)',
+         0.115,
          ['', '1-day', '2-day', '3-day', '4-day', '5-day', 'Overall'],
          lambda r: [['Hrs/d',
                      *[f"{r['avg_credit_per_day_by_length'][i]:.2f}" for i in range(1, 6)],
                      f"{r['avg_credit_per_day']:.2f}"]]),
-        (0.225, 'Commutability',
+        ('Commutability',
+         0.220,
          ['', '1-day', '2-day', '3-day', '4-day', '5-day', 'Overall'],
          lambda r: [
              ['Front', *[f"{r['front_commute_pct'][i]:.1f}%" for i in range(1, 6)],
               f"{r['front_commute_rate']:.1f}%"],
-             ['Back', *[f"{r['back_commute_pct'][i]:.1f}%" for i in range(1, 6)],
+             ['Back',  *[f"{r['back_commute_pct'][i]:.1f}%"  for i in range(1, 6)],
               f"{r['back_commute_rate']:.1f}%"],
-             ['Both', *[f"{r['both_commute_pct'][i]:.1f}%" for i in range(1, 6)],
+             ['Both',  *[f"{r['both_commute_pct'][i]:.1f}%"  for i in range(1, 6)],
               f"{r['both_commute_rate']:.1f}%"],
          ]),
-        (0.115, 'Red-Eye Trips',
+        ('Red-Eye Trips',
+         0.115,
          ['', '1-day', '2-day', '3-day', '4-day', '5-day', 'Overall'],
-         lambda r: [['%', *[f"{r['redeye_pct'][i]:.1f}%" for i in range(1, 6)],
+         lambda r: [['%',
+                     *[f"{r['redeye_pct'][i]:.1f}%" for i in range(1, 6)],
                      f"{r['redeye_rate']:.1f}%"]]),
     ]
 
-    cur_bottom = AREA_BOT
-    for h_frac, title, headers, rows_fn in table_specs:
-        h = AREA_H * h_frac
-        fig.text(L_LEFT, cur_bottom + h - T_TITLE_H * 0.6, title,
-                 fontsize=7.5, fontweight='bold', color=color, va='center')
-        ax = fig.add_axes([L_LEFT, cur_bottom, L_W, h - T_TITLE_H])
-        ax.axis('off')
-        _draw_mpl_table(ax, headers, rows_fn(result), color, fontsize=6.5)
-        cur_bottom += h + GAP
+    # Calculate heights in figure coordinates, top-to-bottom
+    n_tables  = len(table_specs)
+    total_gap = GAP * (n_tables - 1)
+    total_lbl = T_LBL_H * n_tables
+    avail_h   = AREA_H - total_gap - total_lbl
+    # fracs must sum to 1
+    frac_sum  = sum(s[1] for s in table_specs)
 
-    # Right charts (2×2 grid)
+    cur_top = AREA_TOP   # start from top, walk downward
+    for title, frac, headers, rows_fn in table_specs:
+        tbl_h  = avail_h * (frac / frac_sum)
+        # Title label
+        fig.text(L_LEFT, cur_top - T_LBL_H * 0.3, title,
+                 fontsize=7.5, fontweight='bold', color=color, va='top')
+        # Table axes (just below title)
+        ax_bot = cur_top - T_LBL_H - tbl_h
+        ax = fig.add_axes([L_LEFT, ax_bot, L_W, tbl_h])
+        ax.axis('off')
+        _draw_mpl_table(ax, headers, rows_fn(result), color, fontsize=7.0)
+        cur_top = ax_bot - GAP
+
+    # ── Right side: 2x2 charts ────────────────────────────────────────────────
+    # Shrink chart area: top pulled down 8%, bottom raised 2% vs table area
+    # This ensures charts never bleed into the metrics bar regardless of rescaling
+    CHART_TOP = AREA_TOP - 0.08
+    CHART_BOT = AREA_BOT + 0.02
     gs = gridspec.GridSpec(2, 2, left=R_LEFT, right=R_RIGHT,
-                            top=AREA_TOP, bottom=AREA_BOT,
-                            wspace=0.38, hspace=0.52)
+                            top=CHART_TOP, bottom=CHART_BOT,
+                            wspace=0.40, hspace=0.60)
 
     lbl5 = ['1d', '2d', '3d', '4d', '5d']
 
-    # Chart 1: Trip Length
     ax1 = fig.add_subplot(gs[0, 0])
     ax1.bar(lbl5, [result['trip_counts'][i] for i in range(1, 6)], color=color, alpha=0.85)
     ax1.set_title('Trip Length Distribution', fontsize=7, fontweight='bold', pad=2)
     ax1.set_ylabel('Count', fontsize=6)
 
-    # Chart 2: Single Leg Last Day
     ax2 = fig.add_subplot(gs[0, 1])
     ax2.bar(lbl5, [result['single_leg_pct'][i] for i in range(1, 6)], color=color, alpha=0.85)
     ax2.set_title('Single Leg Last Day (%)', fontsize=7, fontweight='bold', pad=2)
     ax2.set_ylabel('%', fontsize=6)
 
-    # Chart 3: Commutability grouped
     ax3 = fig.add_subplot(gs[1, 0])
     x = range(5)
     w = 0.25
@@ -1944,7 +1981,6 @@ def _create_summary_fig(base, result, display_name, front_str, back_str):
     ax3.set_xticklabels(lbl5, fontsize=6)
     ax3.legend(fontsize=5, loc='upper right')
 
-    # Chart 4: Red-Eye
     ax4 = fig.add_subplot(gs[1, 1])
     ax4.bar(lbl5, [result['redeye_pct'][i] for i in range(1, 6)], color='#e74c3c', alpha=0.85)
     ax4.set_title('Red-Eye Trips (%)', fontsize=7, fontweight='bold', pad=2)
@@ -1960,7 +1996,7 @@ def _create_summary_fig(base, result, display_name, front_str, back_str):
 
 
 def _create_top20_fig(base, legs_data, display_name):
-    """Create landscape Top-20 page figure."""
+    """Create landscape Top-25 page figure."""
     import matplotlib.pyplot as plt
     import matplotlib
     import numpy as np
@@ -1970,27 +2006,34 @@ def _create_top20_fig(base, legs_data, display_name):
     base_label = "All Bases" if base == "All Bases" else f"{base} BASE"
     is_all = (base == "All Bases")
 
+    # Use tight margins for print (0.5" = safe for all printers)
+    # 0.5/11 = 0.0455 LR,  0.5/8.5 = 0.0588 TB
     fig = plt.figure(figsize=(11, 8.5))
     fig.patch.set_facecolor('white')
+    MARGIN_LR = 0.046
+    MARGIN_TB = 0.060
 
-    fig.text(0.5, 0.977,
-             f"{base_label} – Top 20 Longest Legs (Sorted by Frequency)",
-             ha='center', va='top', fontsize=13, fontweight='bold', color='#333333')
-    fig.text(0.5, 0.953, display_name,
-             ha='center', va='top', fontsize=8.5, color='#777777')
+    title_top = 1.0 - MARGIN_TB
+    fig.text(0.5, title_top,
+             f"{base_label} - Top 25 Longest Legs (Sorted by Frequency)",
+             ha='center', va='top', fontsize=12, fontweight='bold', color='#333333')
+    fig.text(0.5, title_top - 0.038, display_name,
+             ha='center', va='top', fontsize=8, color='#777777')
 
     # Summary bar
-    bax = fig.add_axes([0.03, 0.908, 0.94, 0.038])
+    BAR_TOP = title_top - 0.075
+    BAR_H   = 0.048
+    bax = fig.add_axes([MARGIN_LR, BAR_TOP - BAR_H, 1 - 2*MARGIN_LR, BAR_H])
     bax.set_facecolor(color)
     bax.axis('off')
     total = legs_data['total_top20']
     base_n = legs_data['base_top20']
-    non_n = legs_data['non_base_top20']
-    bpct = legs_data['base_pct_total']
+    non_n  = legs_data['non_base_top20']
+    bpct   = legs_data['base_pct_total']
     if is_all:
-        bar_txt = f"Total Legs (Top 20): {total:,}"
+        bar_txt = f"Total Legs (Top 25): {total:,}"
     else:
-        bar_txt = (f"Total Legs (Top 20): {total:,}   |   "
+        bar_txt = (f"Total Legs (Top 25): {total:,}   |   "
                    f"{base} Crews: {base_n:,} ({bpct}%)   |   "
                    f"Non-{base} Crews: {non_n:,} ({100 - bpct}%)")
     bax.text(0.5, 0.5, bar_txt, ha='center', va='center', fontsize=9,
@@ -2005,20 +2048,27 @@ def _create_top20_fig(base, legs_data, display_name):
         headers = ['Rank', 'Route', 'Block', 'Total', 'Top Base', 'Base%']
         rows = [[str(i + 1), l['route'], l['block_str'], str(l['total']),
                  l['crew_dist'], f"{l['base_pct']}%"] for i, l in enumerate(legs)]
-        tbl_left, tbl_right = 0.03, 0.97
+        tbl_left  = MARGIN_LR
+        tbl_right = 1 - MARGIN_LR
     else:
         headers = ['Rank', 'Route', 'Block', 'Total', f'{base}%', 'Crew Distribution']
         rows = [[str(i + 1), l['route'], l['block_str'], str(l['total']),
                  f"{l['base_pct']}%", l['crew_dist']] for i, l in enumerate(legs)]
-        tbl_left, tbl_right = 0.03, 0.72
-
-    tbl_w = tbl_right - tbl_left
-    ax = fig.add_axes([tbl_left, 0.03, tbl_w, 0.862])
-    ax.axis('off')
+        tbl_left  = MARGIN_LR
+        tbl_right = 0.710   # leave room for pie
 
     n_rows = len(rows)
     n_cols = len(headers)
 
+    CONTENT_TOP = BAR_TOP - BAR_H - 0.010
+    CONTENT_BOT = MARGIN_TB
+    tbl_h = CONTENT_TOP - CONTENT_BOT
+    tbl_w = tbl_right - tbl_left
+
+    ax = fig.add_axes([tbl_left, CONTENT_BOT, tbl_w, tbl_h])
+    ax.axis('off')
+
+    # Color-code base% column for base-specific report
     cell_colors = []
     for r in range(n_rows):
         row_c = ['#eef2f8' if r % 2 == 0 else 'white'] * n_cols
@@ -2027,6 +2077,9 @@ def _create_top20_fig(base, legs_data, display_name):
             row_c[4] = ('#c8e6c9' if pct >= 90 else
                         '#fff9c4' if pct >= 50 else '#ffccbc')
         cell_colors.append(row_c)
+
+    # Font size: smaller to fit 25 rows
+    font_sz = 6.8 if n_rows <= 20 else 6.2
 
     tbl = ax.table(
         cellText=rows,
@@ -2037,7 +2090,7 @@ def _create_top20_fig(base, legs_data, display_name):
         cellColours=cell_colors,
     )
     tbl.auto_set_font_size(False)
-    tbl.set_fontsize(7.5)
+    tbl.set_fontsize(font_sz)
 
     for j in range(n_cols):
         tbl[0, j].set_facecolor(color)
@@ -2046,20 +2099,22 @@ def _create_top20_fig(base, legs_data, display_name):
         cell.set_edgecolor('#cccccc')
         cell.set_linewidth(0.3)
 
-    # Set proportional column widths for base-specific table
+    # Proportional column widths (base-specific)
     if not is_all:
         col_widths = [0.05, 0.09, 0.07, 0.07, 0.07, 0.65]
         tw = sum(col_widths)
         for j, cw in enumerate(col_widths):
             for r in range(0, n_rows + 1):
                 tbl[r, j].set_width(cw / tw)
-        # Left-align crew distribution
         for r in range(1, n_rows + 1):
             tbl[r, 5]._text.set_ha('left')
 
     # Pie chart (base-specific only)
     if not is_all and total > 0:
-        pax = fig.add_axes([0.745, 0.38, 0.225, 0.44])
+        pie_left   = tbl_right + 0.015
+        pie_bottom = CONTENT_BOT + tbl_h * 0.20
+        pie_size   = min(1 - MARGIN_LR - pie_left, tbl_h * 0.65)
+        pax = fig.add_axes([pie_left, pie_bottom, pie_size, pie_size])
         wedge_sizes = [max(base_n, 0), max(non_n, 0)]
         if sum(wedge_sizes) > 0:
             wedges, _ = pax.pie(
@@ -2069,12 +2124,12 @@ def _create_top20_fig(base, legs_data, display_name):
                 counterclock=False,
                 wedgeprops=dict(linewidth=0.5, edgecolor='white'),
             )
-            pax.set_title(f'{base} vs Others', fontsize=9, fontweight='bold')
-            for i, (wedge, txt, clr) in enumerate(zip(
+            pax.set_title(f'{base} vs Others', fontsize=9, fontweight='bold', pad=6)
+            for wedge, txt, clr in zip(
                 wedges,
                 [f"{base}\n{bpct}%", f"Others\n{100 - bpct}%"],
                 ['white', '#555555'],
-            )):
+            ):
                 angle = np.radians((wedge.theta2 + wedge.theta1) / 2)
                 xp = 0.52 * np.cos(angle)
                 yp = 0.52 * np.sin(angle)
@@ -2125,12 +2180,12 @@ def generate_comprehensive_base_report(file_content, fdata, selected_base,
             fig = _create_summary_fig(
                 base, result, display_name, front_time_str, back_time_str
             )
-            pdf.savefig(fig, bbox_inches='tight')
+            pdf.savefig(fig, dpi=150)
             plt.close(fig)
 
             legs_data = get_base_top20_legs(file_content, base, bid_year)
             fig = _create_top20_fig(base, legs_data, display_name)
-            pdf.savefig(fig, bbox_inches='tight')
+            pdf.savefig(fig, dpi=150)
             plt.close(fig)
 
     return buf.getvalue()
