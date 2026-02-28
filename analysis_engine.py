@@ -1703,7 +1703,7 @@ def get_all_flight_legs_with_block(trip_lines):
 
 def get_base_top20_legs(file_content, base, bid_year=2026):
     """
-    Get top-25 legs sorted by block time (longest first).
+    Get top-20 legs sorted by frequency.
     For a specific base: all legs departing from that base's airports (anywhere in trip).
     For 'All Bases': all legs across the entire file.
     Returns dict with 'legs' list and summary stats.
@@ -1736,15 +1736,11 @@ def get_base_top20_legs(file_content, base, bid_year=2026):
                     'total': 0,
                     'by_base': {},
                 }
-            # Keep the max block time seen for this route
-            if block_minutes > route_data[route]['block_minutes']:
-                route_data[route]['block_minutes'] = block_minutes
-                route_data[route]['block_str'] = block_str
             route_data[route]['total'] += occurrences
             bd = route_data[route]['by_base']
             bd[trip_base] = bd.get(trip_base, 0) + occurrences
 
-    top20 = sorted(route_data.items(), key=lambda x: x[1]['block_minutes'], reverse=True)[:25]
+    top20 = sorted(route_data.items(), key=lambda x: x[1]['total'], reverse=True)[:25]
 
     legs_result = []
     total_top20 = 0
