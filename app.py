@@ -27,49 +27,32 @@ def check_password():
         if "APP_PASSWORD" in st.secrets:
             correct_password = st.secrets["APP_PASSWORD"]
         else:
-            # Fallback default password if no password set in secrets
             correct_password = "pilot2026"
         
         if st.session_state["password"] == correct_password:
             st.session_state["password_correct"] = True
-            del st.session_state["password"]  # Don't store password
+            del st.session_state["password"]
         else:
             st.session_state["password_correct"] = False
 
-    # First run, show input for password
     if "password_correct" not in st.session_state:
         st.markdown("# 🔒 Pilot Trip Scheduling Analysis")
         st.markdown("### Please enter the password to access the application")
-        st.text_input(
-            "Password", 
-            type="password", 
-            on_change=password_entered, 
-            key="password"
-        )
+        st.text_input("Password", type="password", on_change=password_entered, key="password")
         st.info("💡 Contact your administrator for the access password")
         return False
-    
-    # Password incorrect, show input + error
     elif not st.session_state["password_correct"]:
         st.markdown("# 🔒 Pilot Trip Scheduling Analysis")
         st.markdown("### Please enter the password to access the application")
-        st.text_input(
-            "Password", 
-            type="password", 
-            on_change=password_entered, 
-            key="password"
-        )
+        st.text_input("Password", type="password", on_change=password_entered, key="password")
         st.error("😕 Password incorrect. Please try again.")
         return False
-    
-    # Password correct
     else:
         return True
 
 if not check_password():
-    st.stop()  # Don't continue if check_password is not True
+    st.stop()
 
-# Main application starts here (password verified)
 # Initialize session state
 if 'uploaded_files' not in st.session_state:
     st.session_state.uploaded_files = {}
@@ -79,13 +62,11 @@ if 'file_counter' not in st.session_state:
     st.session_state.file_counter = 0
 
 def get_file_hash(content):
-    """Generate unique hash for file content"""
     return hashlib.md5(content.encode()).hexdigest()[:8]
 
 # Sidebar
 st.sidebar.title("✈️ Trip Analysis Settings")
 
-# Time selectors
 st.sidebar.subheader("Commutability Settings")
 time_options = [f"{h:02d}:{m:02d}" for h in range(24) for m in [0, 30]]
 time_to_minutes = {t: int(t[:2])*60 + int(t[3:]) for t in time_options}
@@ -104,7 +85,6 @@ back_end_time = st.sidebar.selectbox(
     key='sidebar_back_time'
 )
 
-# Checkbox for including short trips in commutability
 include_short_commute = st.sidebar.checkbox(
     "Include 1-2 Day Trips in Commutability",
     value=False,
@@ -112,36 +92,29 @@ include_short_commute = st.sidebar.checkbox(
     help="By default, commutability analysis only includes trips 3+ days. Check this to include 1-2 day trips."
 )
 
-# Base filter
 st.sidebar.subheader("Base Filter")
 base_options = ["All Bases", "ATL", "BOS", "NYC", "DTW", "SLC", "MSP", "SEA", "LAX"]
 selected_base = st.sidebar.selectbox("Select Base", base_options, key='sidebar_base')
 
-# Update Analysis button
 st.sidebar.markdown("---")
 if st.session_state.uploaded_files and st.sidebar.button("🔄 Update Analysis", type="secondary", key='sidebar_update'):
     with st.spinner("Updating analysis with new settings..."):
         st.session_state.analysis_results = {}
-        st.session_state.detailed_trips = {}  # Clear detailed trips cache too
+        st.session_state.detailed_trips = {}
         
         front_minutes = time_to_minutes[front_end_time]
         back_minutes = time_to_minutes[back_end_time]
         
         for fname, fdata in st.session_state.uploaded_files.items():
             result = analysis_engine.analyze_file(
-                fdata['content'],
-                selected_base,
-                front_minutes,
-                back_minutes,
-                include_short_commute,
-                fdata['year']  # Pass the bid year from uploaded file
+                fdata['content'], selected_base, front_minutes, back_minutes,
+                include_short_commute, fdata['year']
             )
             st.session_state.analysis_results[fname] = result
         
         st.success("✅ Analysis updated!")
         st.rerun()
 
-# Clear button
 if st.sidebar.button("🗑️ Clear All Data", type="primary", key='sidebar_clear'):
     st.session_state.uploaded_files = {}
     st.session_state.analysis_results = {}
@@ -155,14 +128,12 @@ st.markdown("Upload trip schedule files to analyze metrics including trip length
 # File upload section
 st.header("📁 Upload Schedule Files")
 
-# Show current file count
 col1, col2 = st.columns([3, 1])
 with col2:
     st.metric("Files Loaded", len(st.session_state.uploaded_files))
     if len(st.session_state.uploaded_files) >= 12:
         st.warning("⚠️ Maximum 12 files")
 
-# File uploader with form to avoid key conflicts
 with col1:
     if len(st.session_state.uploaded_files) < 12:
         uploaded_files = st.file_uploader(
@@ -174,11 +145,9 @@ with col1:
         
         if uploaded_files:
             for uploaded_file in uploaded_files:
-                # Read content immediately
                 content = uploaded_file.read().decode('utf-8')
                 file_hash = get_file_hash(content)
                 
-                # Check if this exact file content is already uploaded
                 already_exists = False
                 for existing_name, existing_data in st.session_state.uploaded_files.items():
                     if get_file_hash(existing_data['content']) == file_hash:
@@ -186,9 +155,7 @@ with col1:
                         st.warning(f"⚠️ File '{uploaded_file.name}' (same content) already uploaded as '{existing_name}'")
                         break
                 
-                # Also check if there's a pending form for this exact content
                 if not already_exists:
-                    # Show date selection form
                     with st.form(key=f'date_form_{file_hash}'):
                         st.subheader(f"📅 Set Date for: {uploaded_file.name}")
                         
@@ -201,14 +168,8 @@ with col1:
                                 index=0
                             )
                         with col_y:
-                            year = st.number_input(
-                                "Year",
-                                min_value=2020,
-                                max_value=2030,
-                                value=2026
-                            )
+                            year = st.number_input("Year", min_value=2020, max_value=2030, value=2026)
                         
-                        # Fleet field (optional)
                         fleet = st.text_input(
                             "Fleet (optional)",
                             placeholder="e.g., 320, 737, A220",
@@ -218,12 +179,9 @@ with col1:
                         submitted = st.form_submit_button("✅ Add File")
                         
                         if submitted:
-                            # Create unique filename based on date and optional fleet
-                            # Extract base name without extension
                             base_name = uploaded_file.name.rsplit('.', 1)[0] if '.' in uploaded_file.name else uploaded_file.name
                             extension = uploaded_file.name.rsplit('.', 1)[1] if '.' in uploaded_file.name else 'txt'
                             
-                            # Create new filename: basename_MMYYYY_fleet.ext or basename_MMYYYY.ext
                             month_num = {
                                 'January': '01', 'February': '02', 'March': '03', 'April': '04',
                                 'May': '05', 'June': '06', 'July': '07', 'August': '08',
@@ -237,7 +195,6 @@ with col1:
                                 new_filename = f"{base_name}_{month_num}{year}.{extension}"
                                 display_name = f"{month} {year}"
                             
-                            # Add to uploaded files with new filename
                             st.session_state.uploaded_files[new_filename] = {
                                 'content': content,
                                 'month': month,
@@ -280,12 +237,8 @@ if st.session_state.uploaded_files:
             
             for fname, fdata in st.session_state.uploaded_files.items():
                 result = analysis_engine.analyze_file(
-                    fdata['content'],
-                    selected_base,
-                    front_minutes,
-                    back_minutes,
-                    include_short_commute,
-                    fdata['year']  # Pass the bid year from uploaded file
+                    fdata['content'], selected_base, front_minutes, back_minutes,
+                    include_short_commute, fdata['year']
                 )
                 st.session_state.analysis_results[fname] = result
             
@@ -297,14 +250,12 @@ if st.session_state.analysis_results:
     st.header("📊 Analysis Results")
     
     if len(st.session_state.analysis_results) == 1:
-        # Single file - show summary or detailed view based on toggle
         fname = list(st.session_state.analysis_results.keys())[0]
         result = st.session_state.analysis_results[fname]
         fdata = st.session_state.uploaded_files[fname]
         
         st.subheader(f"Analysis: {fdata['display_name']}")
         
-        # View toggle
         view_mode = st.radio(
             "View Mode",
             ["Summary", "Detailed Trip Table"],
@@ -313,36 +264,29 @@ if st.session_state.analysis_results:
         )
         
         if view_mode == "Summary":
-            # AI Chat Section for Summary View
+            # AI Chat Section
             with st.expander("💬 Ask AI About This Analysis", expanded=False):
                 st.markdown("Ask questions about the summary statistics and metrics!")
                 st.markdown("*Examples: 'What does this data tell me?', 'Are 3-days or 4-days better for credit?'*")
                 
-                # Try to get API key from secrets, then from session state, then from user input
                 api_key_summary = None
                 if "ANTHROPIC_API_KEY" in st.secrets:
                     api_key_summary = st.secrets["ANTHROPIC_API_KEY"]
                     st.success("✅ Using API key from Streamlit secrets")
                 else:
-                    # API Key input
                     api_key_summary = st.text_input(
-                        "Anthropic API Key",
-                        type="password",
-                        help="Get your API key at https://console.anthropic.com, or save it in Settings > Secrets as ANTHROPIC_API_KEY",
+                        "Anthropic API Key", type="password",
+                        help="Get your API key at https://console.anthropic.com",
                         key="anthropic_api_key_summary",
                         value=st.session_state.get('saved_api_key', '')
                     )
-                    
                     if api_key_summary and api_key_summary != st.session_state.get('saved_api_key', ''):
                         st.session_state.saved_api_key = api_key_summary
-                        st.info("💡 API key saved for this session. To save permanently, add it to Streamlit Settings > Secrets")
                 
-                # Question input
                 user_question_summary = st.text_area(
                     "Your Question",
                     placeholder="e.g., What's the best trip length for maximizing credit per day?",
-                    height=80,
-                    key="ai_question_summary"
+                    height=80, key="ai_question_summary"
                 )
                 
                 if st.button("Ask AI", type="primary", key="ask_ai_summary"):
@@ -354,11 +298,10 @@ if st.session_state.analysis_results:
                         with st.spinner("Analyzing..."):
                             try:
                                 import anthropic
-                                
-                                # Prepare summary data for AI
                                 summary_data = {
                                     'file': fdata['display_name'],
                                     'total_trips': result['total_trips'],
+                                    'total_credit_hours': result.get('total_credit_hours', 0),
                                     'avg_trip_length': result['avg_trip_length'],
                                     'avg_credit_per_trip': result['avg_credit_per_trip'],
                                     'avg_credit_per_day': result['avg_credit_per_day'],
@@ -370,35 +313,20 @@ if st.session_state.analysis_results:
                                     'front_end_commutable_pct': result['front_commute_pct'],
                                     'back_end_commutable_pct': result['back_commute_pct']
                                 }
-                                
-                                # Call Claude API
                                 client = anthropic.Anthropic(api_key=api_key_summary)
                                 message = client.messages.create(
                                     model="claude-sonnet-4-20250514",
                                     max_tokens=2000,
-                                    messages=[{
-                                        "role": "user",
-                                        "content": f"""You are analyzing pilot trip scheduling data. Here is the summary statistics:
-
-{summary_data}
-
-The user's question is: {user_question_summary}
-
-Please provide a helpful, concise answer based on this data. Explain patterns and provide actionable insights."""
-                                    }]
+                                    messages=[{"role": "user", "content": f"""You are analyzing pilot trip scheduling data. Here is the summary statistics:\n\n{summary_data}\n\nThe user's question is: {user_question_summary}\n\nPlease provide a helpful, concise answer based on this data."""}]
                                 )
-                                
-                                # Display response
                                 st.success("✨ AI Analysis:")
                                 st.markdown(message.content[0].text)
-                                
                             except ImportError:
-                                st.error("❌ Anthropic library not installed. Run: `pip install anthropic`")
+                                st.error("❌ Anthropic library not installed.")
                             except Exception as e:
                                 st.error(f"❌ Error: {str(e)}")
             
-            # SUMMARY VIEW (existing code)
-            # Summary metrics
+            # ── Summary metrics row 1 ──────────────────────────────────────
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric("Total Trips", result['total_trips'])
@@ -409,41 +337,36 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
             with col4:
                 st.metric("Avg Credit/Day", f"{result['avg_credit_per_day']:.2f} hrs")
             
-            col1, col2, col3 = st.columns(3)
+            # ── Summary metrics row 2 ──────────────────────────────────────
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric("Front-End Commute", f"{result['front_commute_rate']:.1f}%")
             with col2:
                 st.metric("Back-End Commute", f"{result['back_commute_rate']:.1f}%")
             with col3:
                 st.metric("Both Ends Commute", f"{result['both_commute_rate']:.1f}%")
+            with col4:
+                total_cr = result.get('total_credit_hours', 0)
+                st.metric("Total Credit (hrs)", f"{total_cr:,.1f}")
             
             # Charts in tabs
             tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-                "Trip Length", "Single Leg Last Day", "Credit/Trip", 
+                "Trip Length", "Single Leg Last Day", "Credit/Trip",
                 "Credit/Day", "Commutability", "Red-Eye Trips", "Staffing Heat Map"
             ])
             
             with tab1:
-                # Calculate percentages for each trip length
                 total_trips = result['total_trips']
                 trip_counts = [result['trip_counts'][i] for i in range(1, 6)]
                 trip_percentages = [(count / total_trips * 100) if total_trips > 0 else 0 for count in trip_counts]
-                
-                # Create bar chart with count and percentage
                 data = pd.DataFrame({
                     'Length': [f"{i}-day" for i in range(1, 6)],
-                    'Count': trip_counts,
-                    'Percentage': trip_percentages
+                    'Count': trip_counts, 'Percentage': trip_percentages
                 })
-                
-                fig = px.bar(
-                    data,
-                    x='Length',
-                    y='Count',
-                    labels={'Length': 'Trip Length', 'Count': 'Number of Trips'},
-                    title='Trip Length Distribution',
-                    text=[f"{count}<br>({pct:.1f}%)" for count, pct in zip(trip_counts, trip_percentages)]
-                )
+                fig = px.bar(data, x='Length', y='Count',
+                            labels={'Length': 'Trip Length', 'Count': 'Number of Trips'},
+                            title='Trip Length Distribution',
+                            text=[f"{count}<br>({pct:.1f}%)" for count, pct in zip(trip_counts, trip_percentages)])
                 fig.update_traces(textposition='outside')
                 st.plotly_chart(fig, use_container_width=True)
             
@@ -452,8 +375,7 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                     'Length': [f"{i}-day" for i in range(1, 6)],
                     'Percentage': [result['single_leg_pct'][i] for i in range(1, 6)]
                 })
-                fig = px.bar(data, x='Length', y='Percentage',
-                            title='Trips with Single Leg on Last Day (%)')
+                fig = px.bar(data, x='Length', y='Percentage', title='Trips with Single Leg on Last Day (%)')
                 st.plotly_chart(fig, use_container_width=True)
             
             with tab3:
@@ -461,8 +383,7 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                     'Length': [f"{i}-day" for i in range(1, 6)],
                     'Hours': [result['avg_credit_by_length'][i] for i in range(1, 6)]
                 })
-                fig = px.bar(data, x='Length', y='Hours',
-                            title='Average Credit Hours per Trip')
+                fig = px.bar(data, x='Length', y='Hours', title='Average Credit Hours per Trip')
                 st.plotly_chart(fig, use_container_width=True)
             
             with tab4:
@@ -470,8 +391,7 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                     'Length': [f"{i}-day" for i in range(1, 6)],
                     'Hours/Day': [result['avg_credit_per_day_by_length'][i] for i in range(1, 6)]
                 })
-                fig = px.bar(data, x='Length', y='Hours/Day',
-                            title='Average Credit Hours per Day')
+                fig = px.bar(data, x='Length', y='Hours/Day', title='Average Credit Hours per Day')
                 st.plotly_chart(fig, use_container_width=True)
             
             with tab5:
@@ -487,26 +407,17 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                 st.plotly_chart(fig, use_container_width=True)
             
             with tab6:
-                # Calculate red-eye counts and percentages by trip length
                 trip_counts = [result['trip_counts'][i] for i in range(1, 6)]
                 redeye_pcts = [result['redeye_pct'][i] for i in range(1, 6)]
                 redeye_counts = [int(trip_counts[i-1] * redeye_pcts[i-1] / 100) for i in range(1, 6)]
-                
-                # Create bar chart with count and percentage
                 data = pd.DataFrame({
                     'Length': [f"{i}-day" for i in range(1, 6)],
-                    'Count': redeye_counts,
-                    'Percentage': redeye_pcts
+                    'Count': redeye_counts, 'Percentage': redeye_pcts
                 })
-                
-                fig = px.bar(
-                    data,
-                    x='Length',
-                    y='Count',
-                    labels={'Length': 'Trip Length', 'Count': 'Number of Trips with Red-Eye'},
-                    title='Trips Containing Red-Eye Flight by Trip Length',
-                    text=[f"{count}<br>({pct:.1f}%)" for count, pct in zip(redeye_counts, redeye_pcts)]
-                )
+                fig = px.bar(data, x='Length', y='Count',
+                            labels={'Length': 'Trip Length', 'Count': 'Number of Trips with Red-Eye'},
+                            title='Trips Containing Red-Eye Flight by Trip Length',
+                            text=[f"{count}<br>({pct:.1f}%)" for count, pct in zip(redeye_counts, redeye_pcts)])
                 fig.update_traces(textposition='outside')
                 st.plotly_chart(fig, use_container_width=True)
             
@@ -514,76 +425,42 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                 st.markdown("### 📅 Daily Staffing Heat Map")
                 st.caption("Shows the number of pilots working each day of the month based on trip operations")
                 
-                # Generate heat map data
                 with st.spinner("Generating staffing heat map..."):
                     heatmap_data = analysis_engine.generate_staffing_heatmap(
-                        fdata['content'],
-                        fdata['month'],
-                        fdata['year'],
-                        selected_base
+                        fdata['content'], fdata['month'], fdata['year'], selected_base
                     )
                 
-                # Create calendar-style heat map
                 dates = heatmap_data['dates']
                 pilot_counts = heatmap_data['pilot_counts']
                 trip_details = heatmap_data['trip_details']
-                
-                # Format dates for display
-                day_names = [d.strftime('%a') for d in dates]  # Mon, Tue, Wed, etc.
+                day_names = [d.strftime('%a') for d in dates]
                 day_numbers = [d.day for d in dates]
-                
-                # Create x-axis labels with day number and day of week
                 x_labels = [f"{day}<br>{dow}" for day, dow in zip(day_numbers, day_names)]
-                
-                # Create text to display in each cell (the count)
                 cell_text = [[str(count) if count > 0 else "" for count in pilot_counts]]
                 
-                # Create heat map using plotly
                 import plotly.graph_objects as go
-                
-                # Determine color scale max (use 95th percentile to avoid outliers skewing scale)
                 import numpy as np
                 non_zero_counts = [c for c in pilot_counts if c > 0]
-                if non_zero_counts:
-                    color_max = int(np.percentile(non_zero_counts, 95))
-                else:
-                    color_max = 1
+                color_max = int(np.percentile(non_zero_counts, 95)) if non_zero_counts else 1
                 
                 fig = go.Figure(data=go.Heatmap(
-                    z=[pilot_counts],
-                    x=x_labels,
-                    y=['Pilots Working'],
-                    text=cell_text,
-                    texttemplate='<b>%{text}</b>',
+                    z=[pilot_counts], x=x_labels, y=['Pilots Working'],
+                    text=cell_text, texttemplate='<b>%{text}</b>',
                     textfont={"size": 14, "color": "white"},
                     hovertemplate='<b>Day %{customdata[0]}</b><br>Pilots: %{z}<br><br>%{customdata[1]}<extra></extra>',
-                    colorscale='Blues',
-                    zmin=0,
-                    zmax=color_max,
+                    colorscale='Blues', zmin=0, zmax=color_max,
                     colorbar=dict(title="Pilot<br>Count"),
                     customdata=[[f"{day_numbers[i]} ({day_names[i]})", trip_details[i]] for i in range(len(dates))]
                 ))
-                
                 fig.update_layout(
                     title=f"Daily Pilot Operations - {heatmap_data['month']} {heatmap_data['year']}",
-                    xaxis_title="",
-                    yaxis_title="",
-                    height=300,
-                    xaxis=dict(
-                        tickmode='array',
-                        tickvals=list(range(len(x_labels))),
-                        ticktext=x_labels,
-                        tickangle=0,
-                        side='bottom'
-                    ),
-                    yaxis=dict(
-                        showticklabels=False
-                    )
+                    xaxis_title="", yaxis_title="", height=300,
+                    xaxis=dict(tickmode='array', tickvals=list(range(len(x_labels))),
+                               ticktext=x_labels, tickangle=0, side='bottom'),
+                    yaxis=dict(showticklabels=False)
                 )
-                
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # Summary statistics
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     st.metric("Peak Day", f"{max(pilot_counts)} pilots" if pilot_counts else "N/A")
@@ -594,77 +471,56 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                     days_with_ops = sum(1 for c in pilot_counts if c > 0)
                     st.metric("Days with Ops", f"{days_with_ops}/{len(pilot_counts)}")
                 with col4:
-                    total_pilot_days = sum(pilot_counts)
-                    st.metric("Total Pilot-Days", total_pilot_days)
+                    st.metric("Total Pilot-Days", sum(pilot_counts))
                 
-                # Show day with peak operations
                 if pilot_counts:
                     max_idx = pilot_counts.index(max(pilot_counts))
                     peak_date = dates[max_idx]
                     st.info(f"📊 **Peak Operations:** {peak_date.strftime('%A, %B %d, %Y')} with {pilot_counts[max_idx]} pilots working")
                 
-                # Reserve Correlation Analysis Section
                 st.markdown("---")
                 st.markdown("### 📊 Reserve vs Operations Correlation Analysis")
                 st.caption("Compare required reserve levels with daily pilot operations to identify staffing patterns")
                 
                 with st.expander("📥 Enter Reserve Data for Correlation Analysis", expanded=False):
-                    st.markdown("""
-                    **Instructions:** Enter the required reserve count for each day to analyze correlation with pilot operations.
-                    
-                    You can find this data in your reserve requirements document/table.
-                    """)
-                    
-                    # Create input fields for reserve data
-                    st.markdown("**Enter Reserve Requirements:**")
-                    
-                    # Option to bulk paste data
+                    st.markdown("**Instructions:** Enter the required reserve count for each day.\n\nFormat: `03FEB,39` (one per line)")
                     bulk_input = st.text_area(
-                        "Paste reserve data (format: date,required or one per line)",
-                        placeholder="Example:\n03FEB,39\n04FEB,40\n05FEB,42\n...",
-                        height=150,
-                        key='reserve_bulk_input'
+                        "Paste reserve data", placeholder="Example:\n03FEB,39\n04FEB,40\n05FEB,42",
+                        height=150, key='reserve_bulk_input'
                     )
                     
                     if st.button("📊 Analyze Reserve Correlation", type="primary"):
                         if bulk_input.strip():
                             try:
-                                # Parse the bulk input
                                 reserve_data = {}
                                 month_abbr_map = {
                                     'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
                                     'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12
                                 }
-                                
-                                lines = bulk_input.strip().split('\n')
-                                for line in lines:
+                                month_map = {
+                                    'January': 1, 'February': 2, 'March': 3, 'April': 4,
+                                    'May': 5, 'June': 6, 'July': 7, 'August': 8,
+                                    'September': 9, 'October': 10, 'November': 11, 'December': 12
+                                }
+                                import re
+                                for line in bulk_input.strip().split('\n'):
                                     line = line.strip()
                                     if not line or ',' not in line:
                                         continue
-                                    
                                     parts = line.split(',')
                                     if len(parts) >= 2:
                                         date_str = parts[0].strip().upper()
                                         required = int(parts[1].strip())
-                                        
-                                        # Parse date (e.g., "03FEB" or "3FEB")
-                                        import re
                                         match = re.match(r'(\d{1,2})([A-Z]{3})', date_str)
                                         if match:
                                             day = int(match.group(1))
                                             month_abbr = match.group(2)
                                             month_num = month_abbr_map.get(month_abbr)
-                                            
                                             if month_num == month_map.get(fdata['month']):
-                                                date_key = datetime(fdata['year'], month_num, day)
-                                                reserve_data[date_key] = required
+                                                reserve_data[datetime(fdata['year'], month_num, day)] = required
                                 
                                 if reserve_data:
-                                    # Match reserve data with pilot operations
-                                    matched_dates = []
-                                    reserve_required = []
-                                    pilots_on_duty = []
-                                    
+                                    matched_dates, reserve_required, pilots_on_duty = [], [], []
                                     for date in dates:
                                         if date in reserve_data:
                                             matched_dates.append(date)
@@ -672,14 +528,8 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                                             pilots_on_duty.append(pilot_counts[dates.index(date)])
                                     
                                     if len(matched_dates) >= 3:
-                                        # Calculate correlation
-                                        import numpy as np
                                         correlation = np.corrcoef(reserve_required, pilots_on_duty)[0, 1]
-                                        
-                                        # Display results
                                         st.success(f"✅ Analysis complete! Found {len(matched_dates)} matching dates.")
-                                        
-                                        # Correlation coefficient
                                         col1, col2, col3 = st.columns(3)
                                         with col1:
                                             st.metric("Correlation Coefficient", f"{correlation:.3f}")
@@ -687,236 +537,153 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                                             strength = "Strong" if abs(correlation) > 0.7 else "Moderate" if abs(correlation) > 0.4 else "Weak"
                                             st.metric("Relationship Strength", strength)
                                         with col3:
-                                            direction = "Positive" if correlation > 0 else "Negative"
-                                            st.metric("Direction", direction)
+                                            st.metric("Direction", "Positive" if correlation > 0 else "Negative")
                                         
-                                        # Interpretation
-                                        if correlation > 0.7:
-                                            interpretation = "🟢 **Strong Positive Correlation**: Days with more pilots on duty strongly correlate with higher reserve requirements. This suggests reserves are scaled appropriately to operational needs."
-                                        elif correlation > 0.4:
-                                            interpretation = "🟡 **Moderate Positive Correlation**: There is a moderate relationship between pilot operations and reserve requirements, but other factors may also influence reserve levels."
-                                        elif correlation > 0:
-                                            interpretation = "🟠 **Weak Positive Correlation**: Only a slight tendency for more reserves on busier days. Reserve planning may be driven by other factors."
-                                        else:
-                                            interpretation = "🔴 **Negative/No Correlation**: Reserve requirements don't align with daily operational levels. This may indicate reserves are planned based on other criteria."
-                                        
-                                        st.info(interpretation)
-                                        
-                                        # Scatter plot
-                                        import plotly.express as px
                                         scatter_df = pd.DataFrame({
-                                            'Pilots on Duty': pilots_on_duty,
-                                            'Reserves Required': reserve_required,
+                                            'Pilots on Duty': pilots_on_duty, 'Reserves Required': reserve_required,
                                             'Date': [d.strftime('%b %d') for d in matched_dates],
                                             'Day of Week': [d.strftime('%a') for d in matched_dates]
                                         })
-                                        
-                                        fig = px.scatter(
-                                            scatter_df,
-                                            x='Pilots on Duty',
-                                            y='Reserves Required',
-                                            hover_data=['Date', 'Day of Week'],
-                                            title='Reserve Requirements vs Pilot Operations',
-                                            trendline='ols'
-                                        )
+                                        fig = px.scatter(scatter_df, x='Pilots on Duty', y='Reserves Required',
+                                                        hover_data=['Date', 'Day of Week'],
+                                                        title='Reserve Requirements vs Pilot Operations', trendline='ols')
                                         fig.update_traces(marker=dict(size=10))
                                         st.plotly_chart(fig, use_container_width=True)
-                                        
-                                        # Day-by-day comparison table
-                                        st.markdown("**Day-by-Day Comparison:**")
-                                        comparison_df = pd.DataFrame({
-                                            'Date': [d.strftime('%b %d (%a)') for d in matched_dates],
-                                            'Pilots on Duty': pilots_on_duty,
-                                            'Reserves Required': reserve_required,
-                                            'Ratio (%)': [f"{(res/pilots*100):.1f}%" if pilots > 0 else "N/A" 
-                                                         for res, pilots in zip(reserve_required, pilots_on_duty)]
-                                        })
-                                        st.dataframe(comparison_df, use_container_width=True, hide_index=True)
-                                        
                                     else:
-                                        st.warning(f"⚠️ Only found {len(matched_dates)} matching dates. Need at least 3 for correlation analysis.")
+                                        st.warning(f"⚠️ Only found {len(matched_dates)} matching dates. Need at least 3.")
                                 else:
-                                    st.error("❌ No valid reserve data found. Check your format.")
-                                    
+                                    st.error("❌ No valid reserve data found.")
                             except Exception as e:
                                 st.error(f"❌ Error parsing reserve data: {str(e)}")
-                                st.info("Expected format: 03FEB,39 (one per line)")
                         else:
                             st.warning("⚠️ Please enter reserve data to analyze.")
         
         else:
             # DETAILED TRIP TABLE VIEW
-            # Get detailed trip data
             if 'detailed_trips' not in st.session_state:
                 st.session_state.detailed_trips = {}
             
             if fname not in st.session_state.detailed_trips:
                 with st.spinner("Loading detailed trip data..."):
-                    # Get bid month from uploaded file data
-                    bid_month = fdata['month']
-                    
                     detailed_trips = analysis_engine.get_detailed_trips(
-                        fdata['content'],
-                        selected_base,
-                        bid_month,
-                        fdata['year']  # Pass the bid year
+                        fdata['content'], selected_base, fdata['month'], fdata['year']
                     )
                     st.session_state.detailed_trips[fname] = detailed_trips
             
             trips = st.session_state.detailed_trips[fname]
             
-            # Initialize filter state
             if 'trip_filters' not in st.session_state:
                 st.session_state.trip_filters = {
-                    'trip_length': 'All',
-                    'report_start': '00:00',
-                    'report_end': '23:59',
-                    'release_start': '00:00',
-                    'release_end': '23:59',
-                    'search_term': '',
-                    'sort_column': None,
-                    'sort_ascending': True
+                    'trip_length': 'All', 'report_start': '00:00', 'report_end': '23:59',
+                    'release_start': '00:00', 'release_end': '23:59', 'search_term': '',
+                    'sort_column': None, 'sort_ascending': True
                 }
             
-            # Filters section
             st.markdown("### Filters")
-            
-            # Create filter columns
             filter_col1, filter_col2, filter_col3, filter_col4, filter_col5, filter_col6, filter_col7 = st.columns([1, 1.5, 1.5, 1, 1, 1, 0.5])
             
             with filter_col1:
-                trip_length_filter = st.selectbox(
-                    "Trip Length",
-                    ['All', '1-day', '2-day', '3-day', '4-day', '5-day'],
-                    key='filter_trip_length'
-                )
+                trip_length_filter = st.selectbox("Trip Length", ['All', '1-day', '2-day', '3-day', '4-day', '5-day'], key='filter_trip_length')
             
             with filter_col2:
-                # Time options: 00:00 to 23:59 in 30-min increments, plus 23:59
-                time_options = [f"{h:02d}:{m:02d}" for h in range(24) for m in [0, 30]]
-                time_options.append("23:59")
-                
+                time_options_f = [f"{h:02d}:{m:02d}" for h in range(24) for m in [0, 30]]
+                time_options_f.append("23:59")
                 col_a, col_b = st.columns(2)
                 with col_a:
-                    report_start = st.selectbox("Report Start", time_options, index=0, key='filter_report_start')
+                    report_start = st.selectbox("Report Start", time_options_f, index=0, key='filter_report_start')
                 with col_b:
-                    report_end = st.selectbox("Report End", time_options, index=len(time_options)-1, key='filter_report_end')
+                    report_end = st.selectbox("Report End", time_options_f, index=len(time_options_f)-1, key='filter_report_end')
             
             with filter_col3:
                 col_a, col_b = st.columns(2)
                 with col_a:
-                    release_start = st.selectbox("Release Start", time_options, index=0, key='filter_release_start')
+                    release_start = st.selectbox("Release Start", time_options_f, index=0, key='filter_release_start')
                 with col_b:
-                    release_end = st.selectbox("Release End", time_options, index=len(time_options)-1, key='filter_release_end')
+                    release_end = st.selectbox("Release End", time_options_f, index=len(time_options_f)-1, key='filter_release_end')
             
             with filter_col4:
                 search_term = st.text_input("Search Trip #", key='filter_search', placeholder="e.g., 44")
             
             with filter_col5:
-                num_legs_filter = st.selectbox(
-                    "Number of Legs",
-                    ['All', '2', '3', '4', '5', '6', '7', '8', '9', '10+'],
-                    key='filter_num_legs'
-                )
+                num_legs_filter = st.selectbox("Number of Legs", ['All', '2', '3', '4', '5', '6', '7', '8', '9', '10+'], key='filter_num_legs')
             
             with filter_col6:
                 credit_filter = st.selectbox(
-                    "Credit",
-                    ['All', 'Hard Block', '<15 minutes', '15-30 minutes', '30-60 minutes', '>60 minutes'],
+                    "Credit", ['All', 'Hard Block', '<15 minutes', '15-30 minutes', '30-60 minutes', '>60 minutes'],
                     key='filter_credit'
                 )
             
             with filter_col7:
-                st.write("")  # Spacer
-                st.write("")  # Spacer
+                st.write("")
+                st.write("")
                 if st.button("🔄 Clear", key='clear_filters'):
-                    # Clear detailed trips cache to force reload with unchecked boxes
                     if fname in st.session_state.detailed_trips:
                         del st.session_state.detailed_trips[fname]
-                    # Delete all filter widget keys - they'll reset to defaults on rerun
-                    keys_to_delete = ['filter_trip_length', 'filter_report_start', 'filter_report_end', 
-                                     'filter_release_start', 'filter_release_end', 'filter_search', 'filter_num_legs', 'filter_credit',
-                                     'filter_one_leg_home', 'filter_has_sit', 'filter_has_edp', 
-                                     'filter_has_hol', 'filter_has_carve', 'filter_has_redeye', 'filter_last_leg_dh']
+                    keys_to_delete = ['filter_trip_length', 'filter_report_start', 'filter_report_end',
+                                     'filter_release_start', 'filter_release_end', 'filter_search',
+                                     'filter_num_legs', 'filter_credit', 'filter_one_leg_home',
+                                     'filter_has_sit', 'filter_has_edp', 'filter_has_hol',
+                                     'filter_has_carve', 'filter_has_redeye', 'filter_last_leg_dh']
                     for key in keys_to_delete:
                         if key in st.session_state:
                             del st.session_state[key]
                     st.rerun()
             
-            # Checkbox filters row
             st.markdown("#### Additional Filters")
             checkbox_col1, checkbox_col2, checkbox_col3, checkbox_col4, checkbox_col5, checkbox_col6 = st.columns(6)
-            
             with checkbox_col1:
                 one_leg_home = st.checkbox("One Leg Home Last Day", key='filter_one_leg_home')
-            
             with checkbox_col2:
                 has_sit = st.checkbox("Has SIT Pay", key='filter_has_sit')
-            
             with checkbox_col3:
                 has_edp = st.checkbox("Has EDP", key='filter_has_edp')
-            
             with checkbox_col4:
                 has_hol = st.checkbox("Has Holiday Pay", key='filter_has_hol')
-            
             with checkbox_col5:
                 has_carve = st.checkbox("Has CARVE Pay", key='filter_has_carve')
-            
             with checkbox_col6:
                 has_redeye = st.checkbox("Has Red-Eye", key='filter_has_redeye')
             
-            # Second checkbox row for additional filters
-            dh_col1, dh_col2, dh_col3, dh_col4, dh_col5, dh_col6 = st.columns(6)
+            dh_col1 = st.columns(6)[0]
             with dh_col1:
-                last_leg_dh_filter = st.checkbox(
-                    "Last Leg DH",
-                    key='filter_last_leg_dh',
-                    help="Show only trips where the final flight leg is a Deadhead (DH)"
-                )
+                last_leg_dh_filter = st.checkbox("Last Leg DH", key='filter_last_leg_dh',
+                                                  help="Show only trips where the final flight leg is a Deadhead (DH)")
             
             # Apply filters
             filtered_trips = trips.copy()
             
-            # Trip length filter
             if trip_length_filter != 'All':
                 length = int(trip_length_filter.split('-')[0])
                 filtered_trips = [t for t in filtered_trips if t['length'] == length]
             
-            # Report time filter
-            def time_to_minutes(time_str):
+            def time_to_minutes_local(time_str):
                 h, m = map(int, time_str.split(':'))
                 return h * 60 + m
             
-            report_start_min = time_to_minutes(report_start)
-            report_end_min = time_to_minutes(report_end)
-            filtered_trips = [t for t in filtered_trips 
-                            if t['report_time_minutes'] is not None 
+            report_start_min = time_to_minutes_local(report_start)
+            report_end_min = time_to_minutes_local(report_end)
+            filtered_trips = [t for t in filtered_trips
+                            if t['report_time_minutes'] is not None
                             and report_start_min <= t['report_time_minutes'] <= report_end_min]
             
-            # Release time filter
-            release_start_min = time_to_minutes(release_start)
-            release_end_min = time_to_minutes(release_end)
-            filtered_trips = [t for t in filtered_trips 
-                            if t['release_time_minutes'] is not None 
+            release_start_min = time_to_minutes_local(release_start)
+            release_end_min = time_to_minutes_local(release_end)
+            filtered_trips = [t for t in filtered_trips
+                            if t['release_time_minutes'] is not None
                             and release_start_min <= t['release_time_minutes'] <= release_end_min]
             
-            # Search filter - match partial trip number (including suffix like -1, -2)
             if search_term:
-                filtered_trips = [t for t in filtered_trips 
+                filtered_trips = [t for t in filtered_trips
                                 if t['trip_number'] and search_term in str(t['trip_number'])]
             
-            # Number of legs filter
             if num_legs_filter != 'All':
                 if num_legs_filter == '10+':
                     filtered_trips = [t for t in filtered_trips if t['total_legs'] >= 10]
                 else:
-                    num_legs = int(num_legs_filter)
-                    filtered_trips = [t for t in filtered_trips if t['total_legs'] == num_legs]
+                    filtered_trips = [t for t in filtered_trips if t['total_legs'] == int(num_legs_filter)]
             
-            # Credit filter (CR time in minutes)
             if credit_filter != 'All':
                 if credit_filter == 'Hard Block':
-                    # CR = 0 minutes (hard block, no credit beyond block time)
                     filtered_trips = [t for t in filtered_trips if t.get('credit_minutes') is not None and t.get('credit_minutes') == 0]
                 elif credit_filter == '<15 minutes':
                     filtered_trips = [t for t in filtered_trips if t.get('credit_minutes') is not None and 0 < t.get('credit_minutes') < 15]
@@ -927,130 +694,90 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                 elif credit_filter == '>60 minutes':
                     filtered_trips = [t for t in filtered_trips if t.get('credit_minutes') is not None and t.get('credit_minutes') > 60]
             
-            # Checkbox filters
             if one_leg_home:
                 filtered_trips = [t for t in filtered_trips if t.get('last_day_legs') == 1]
-            
             if has_sit:
                 filtered_trips = [t for t in filtered_trips if t.get('sit') is not None and t.get('sit') > 0]
-            
             if has_edp:
                 filtered_trips = [t for t in filtered_trips if t.get('edp') is not None and t.get('edp') > 0]
-            
             if has_hol:
                 filtered_trips = [t for t in filtered_trips if t.get('hol') is not None and t.get('hol') > 0]
-            
             if has_carve:
                 filtered_trips = [t for t in filtered_trips if t.get('carve') is not None and t.get('carve') > 0]
-            
             if has_redeye:
                 filtered_trips = [t for t in filtered_trips if t.get('has_redeye') == True]
-            
             if last_leg_dh_filter:
                 filtered_trips = [t for t in filtered_trips if t.get('last_leg_dh') == True]
             
-            # Display trip count (sum of all occurrences)
             total_occurrences = sum(trip.get('occurrences', 1) for trip in filtered_trips)
             st.markdown(f"**Showing {total_occurrences} trips** *({len(filtered_trips)} unique patterns)*")
             
-            # AI Chat Section (above the table)
+            # AI Chat Section
             with st.expander("💬 Ask AI About Your Trips", expanded=False):
                 st.markdown("Ask questions about the filtered trips in natural language!")
-                st.markdown("*Examples: 'Which trips have the best credit ratio?', 'Show me commutable 3-days with high pay'*")
                 
-                # Try to get API key from secrets, then from session state, then from user input
                 api_key = None
                 if "ANTHROPIC_API_KEY" in st.secrets:
                     api_key = st.secrets["ANTHROPIC_API_KEY"]
                     st.success("✅ Using API key from Streamlit secrets")
                 else:
-                    # API Key input
                     api_key = st.text_input(
-                        "Anthropic API Key",
-                        type="password",
-                        help="Get your API key at https://console.anthropic.com, or save it in Settings > Secrets as ANTHROPIC_API_KEY",
-                        key="anthropic_api_key",
-                        value=st.session_state.get('saved_api_key', '')
+                        "Anthropic API Key", type="password",
+                        key="anthropic_api_key", value=st.session_state.get('saved_api_key', '')
                     )
-                    
                     if api_key and api_key != st.session_state.get('saved_api_key', ''):
                         st.session_state.saved_api_key = api_key
-                        st.info("💡 API key saved for this session. To save permanently, add it to Streamlit Settings > Secrets")
                 
-                # Question input
-                user_question = st.text_area(
-                    "Your Question",
+                user_question = st.text_area("Your Question",
                     placeholder="e.g., What are the top 5 trips by credit per day?",
-                    height=80,
-                    key="ai_question"
-                )
+                    height=80, key="ai_question")
                 
                 col1, col2 = st.columns(2)
                 with col1:
                     ask_ai_btn = st.button("Ask AI", type="primary", use_container_width=True)
                 with col2:
-                    quick_calc_btn = st.button("⚡ Quick Calculate", use_container_width=True, help="Fast Python calculation for counting queries (no AI needed)")
+                    quick_calc_btn = st.button("⚡ Quick Calculate", use_container_width=True)
                 
                 if quick_calc_btn:
-                    # Quick Python-only calculation for common queries
                     question_lower = user_question.lower()
-                    asking_commutable = any(word in question_lower for word in ['commutable', 'commute', 'both ends', 'both-ends'])
-                    asking_weekday_only = any(phrase in question_lower for phrase in ['monday-friday', 'weekday', 'no weekend', 'mon-fri', 'm-f', 'weekdays only'])
+                    asking_commutable = any(w in question_lower for w in ['commutable', 'commute', 'both ends', 'both-ends'])
+                    asking_weekday_only = any(p in question_lower for p in ['monday-friday', 'weekday', 'no weekend', 'mon-fri', 'm-f', 'weekdays only'])
                     
                     if not (asking_commutable and asking_weekday_only):
                         st.warning("Quick Calculate works best for queries like: 'How many trips are both-ends commutable and operate Monday-Friday only?'")
                     else:
                         with st.spinner("Calculating..."):
-                            # Calculate directly in Python (fast!)
-                            def parse_time_to_minutes(time_str):
-                                if not time_str or time_str == 'N/A':
+                            def parse_t(ts):
+                                if not ts or ts == 'N/A':
                                     return None
                                 try:
-                                    parts = time_str.split(':')
-                                    return int(parts[0]) * 60 + int(parts[1])
+                                    p = ts.split(':')
+                                    return int(p[0]) * 60 + int(p[1])
                                 except:
                                     return None
                             
-                            front_threshold = parse_time_to_minutes(front_end_time)
-                            back_threshold = parse_time_to_minutes(back_end_time)
-                            
-                            matching_trips = []
+                            ft = parse_t(front_end_time)
+                            bt = parse_t(back_end_time)
+                            matching = []
                             for trip in filtered_trips:
-                                report_min = parse_time_to_minutes(trip.get('report_time'))
-                                release_min = parse_time_to_minutes(trip.get('release_time'))
-                                
-                                front_ok = report_min is not None and front_threshold is not None and report_min >= front_threshold
-                                back_ok = release_min is not None and back_threshold is not None and release_min <= back_threshold
-                                both_ok = front_ok and back_ok
-                                
+                                rm = parse_t(trip.get('report_time'))
+                                rlm = parse_t(trip.get('release_time'))
                                 days = trip.get('days_of_week', [])
-                                weekday_only = 'SA' not in days and 'SU' not in days and len(days) > 0
-                                
-                                if both_ok and weekday_only:
-                                    matching_trips.append(trip)
+                                if (rm is not None and ft is not None and rm >= ft and
+                                    rlm is not None and bt is not None and rlm <= bt and
+                                    'SA' not in days and 'SU' not in days and len(days) > 0):
+                                    matching.append(trip)
                             
-                            # Calculate totals
-                            total_occurrences = sum(t.get('occurrences', 1) for t in matching_trips)
+                            total_occ = sum(t.get('occurrences', 1) for t in matching)
                             by_length = {}
-                            for trip in matching_trips:
-                                length = trip['length']
-                                by_length[length] = by_length.get(length, 0) + trip.get('occurrences', 1)
+                            for trip in matching:
+                                l = trip['length']
+                                by_length[l] = by_length.get(l, 0) + trip.get('occurrences', 1)
                             
-                            # Display results
                             st.success("✨ Quick Answer:")
-                            st.markdown(f"""
-**Found {len(matching_trips)} unique trip patterns ({total_occurrences} total occurrences)** that are:
-- ✅ Both-ends commutable (report ≥ {front_end_time}, release ≤ {back_end_time})
-- ✅ Operate Monday-Friday only (no weekends)
-
-**Breakdown by trip length:**
-""")
-                            for length in sorted(by_length.keys()):
-                                count = by_length[length]
-                                st.markdown(f"- **{length}-day trips:** {count} occurrences")
-                            
-                            if len(matching_trips) > 0:
-                                st.markdown(f"\n💡 *Analyzed all {len(filtered_trips)} trips instantly with Python!*")
+                            st.markdown(f"**Found {len(matching)} unique patterns ({total_occ} total occurrences)** — both-ends commutable, Monday-Friday only")
+                            for l in sorted(by_length.keys()):
+                                st.markdown(f"- **{l}-day:** {by_length[l]} occurrences")
                 
                 if ask_ai_btn:
                     if not api_key:
@@ -1058,235 +785,65 @@ Please provide a helpful, concise answer based on this data. Explain patterns an
                     elif not user_question:
                         st.error("Please enter a question")
                     elif len(filtered_trips) == 0:
-                        st.warning("No trips to analyze. Adjust your filters.")
+                        st.warning("No trips to analyze.")
                     elif len(filtered_trips) > 500:
-                        # Check if user has asked the same question before
                         question_key = f"ai_question_{user_question.strip().lower()}"
-                        warned_before = st.session_state.get(question_key, False)
-                        
-                        if not warned_before:
-                            # First time asking with >500 trips - show warning
-                            st.warning(f"""
-⚠️ **Large Dataset Warning**
-
-You have **{len(filtered_trips)} trips** to analyze. The AI can only process the first 500 trips, which may miss important data.
-
-**Recommended options:**
-1. **Filter your data** using the sidebar filters (Base, Length, Credit, etc.) to reduce the dataset
-2. **Use ⚡ Quick Calculate** for counting queries (instant and analyzes ALL trips)
-3. **Click "Ask AI" again** to proceed anyway (AI will provide statistical summary instead of listing trips)
-""")
-                            # Mark that we've warned the user for this question
+                        if not st.session_state.get(question_key, False):
+                            st.warning(f"⚠️ **{len(filtered_trips)} trips** — AI processes first 500. Filter down or use ⚡ Quick Calculate, then click Ask AI again to proceed.")
                             st.session_state[question_key] = True
                             st.stop()
-                        else:
-                            # User asked again - proceed with statistical summary mode
-                            st.info(f"📊 Analyzing {len(filtered_trips)} trips - providing statistical summary...")
                     
-                    # If we get here, proceed with AI analysis
                     if not (len(filtered_trips) > 500 and not st.session_state.get(f"ai_question_{user_question.strip().lower()}", False)):
                         with st.spinner("Analyzing trips..."):
                             try:
-                                # Prepare trip data for AI
                                 import anthropic
                                 
-                                # Determine mode: detailed or statistical
-                                statistical_mode = len(filtered_trips) > 500
+                                def parse_t(ts):
+                                    if not ts or ts == 'N/A':
+                                        return None
+                                    try:
+                                        p = ts.split(':')
+                                        return int(p[0]) * 60 + int(p[1])
+                                    except:
+                                        return None
                                 
-                                if not statistical_mode:
-                                    # Standard mode: send trip details
-                                    trip_summary = []
-                                    
-                                    # Get current commutability thresholds from sidebar
-                                    def parse_time_to_minutes(time_str):
-                                        """Convert HH:MM to minutes, returns None if invalid"""
-                                        if not time_str or time_str == 'N/A':
-                                            return None
-                                        try:
-                                            parts = time_str.split(':')
-                                            return int(parts[0]) * 60 + int(parts[1])
-                                        except:
-                                            return None
-                                
-                                front_threshold = parse_time_to_minutes(front_end_time)
-                                back_threshold = parse_time_to_minutes(back_end_time)
-                                
-                                for trip in filtered_trips[:500]:  # Increased to 500 to capture more trips
-                                    # Calculate commutability flags by parsing time strings
-                                    report_minutes = parse_time_to_minutes(trip.get('report_time'))
-                                    release_minutes = parse_time_to_minutes(trip.get('release_time'))
-                                    
-                                    front_commutable = report_minutes is not None and front_threshold is not None and report_minutes >= front_threshold
-                                    back_commutable = release_minutes is not None and back_threshold is not None and release_minutes <= back_threshold
-                                    both_ends_commutable = front_commutable and back_commutable
-                                    
+                                ft = parse_t(front_end_time)
+                                bt = parse_t(back_end_time)
+                                trip_summary = []
+                                for trip in filtered_trips[:500]:
+                                    rm = parse_t(trip.get('report_time'))
+                                    rlm = parse_t(trip.get('release_time'))
                                     trip_summary.append({
                                         'trip_number': trip.get('trip_number', 'N/A'),
-                                        'base': trip['base'],
-                                        'length': f"{trip['length']}-day",
+                                        'base': trip['base'], 'length': f"{trip['length']}-day",
                                         'days_of_week': trip.get('days_of_week', []),
                                         'occurrences': trip.get('occurrences', 1),
-                                        'report': trip.get('report_time'),
-                                        'release': trip.get('release_time'),
-                                        'front_end_commutable': front_commutable,
-                                        'back_end_commutable': back_commutable,
-                                        'both_ends_commutable': both_ends_commutable,
+                                        'report': trip.get('report_time'), 'release': trip.get('release_time'),
+                                        'front_end_commutable': rm is not None and ft is not None and rm >= ft,
+                                        'back_end_commutable': rlm is not None and bt is not None and rlm <= bt,
+                                        'both_ends_commutable': (rm is not None and ft is not None and rm >= ft and
+                                                                  rlm is not None and bt is not None and rlm <= bt),
                                         'legs': trip['total_legs'],
-                                        'longest_leg': trip.get('longest_leg'),
-                                        'shortest_leg': trip.get('shortest_leg'),
-                                        'credit': trip.get('total_credit'),
-                                        'pay': trip.get('total_pay'),
-                                        'sit': trip.get('sit'),
-                                        'edp': trip.get('edp'),
-                                        'hol': trip.get('hol'),
-                                        'carve': trip.get('carve'),
+                                        'longest_leg': trip.get('longest_leg'), 'shortest_leg': trip.get('shortest_leg'),
+                                        'credit': trip.get('total_credit'), 'pay': trip.get('total_pay'),
+                                        'sit': trip.get('sit'), 'edp': trip.get('edp'),
+                                        'hol': trip.get('hol'), 'carve': trip.get('carve'),
                                         'credit_per_day': trip.get('total_credit', 0) / trip['length'] if trip['length'] > 0 else 0,
                                         'last_day_legs': trip.get('last_day_legs')
                                     })
                                 
-                                else:
-                                    # Statistical mode: Calculate stats in Python, send summary to AI
-                                    def parse_time_to_minutes(time_str):
-                                        if not time_str or time_str == 'N/A':
-                                            return None
-                                        try:
-                                            parts = time_str.split(':')
-                                            return int(parts[0]) * 60 + int(parts[1])
-                                        except:
-                                            return None
-                                    
-                                    front_threshold = parse_time_to_minutes(front_end_time)
-                                    back_threshold = parse_time_to_minutes(back_end_time)
-                                    
-                                    # Calculate comprehensive statistics
-                                    stats = {
-                                        'total_trips': len(filtered_trips),
-                                        'total_occurrences': sum(t.get('occurrences', 1) for t in filtered_trips),
-                                        'by_length': {},
-                                        'by_base': {},
-                                        'commutability': {
-                                            'front': 0,
-                                            'back': 0,
-                                            'both': 0
-                                        },
-                                        'weekday_only': 0,
-                                        'weekend_included': 0,
-                                        'avg_credit': sum(t.get('total_credit', 0) for t in filtered_trips) / len(filtered_trips) if filtered_trips else 0,
-                                        'avg_length': sum(t['length'] * t.get('occurrences', 1) for t in filtered_trips) / sum(t.get('occurrences', 1) for t in filtered_trips) if filtered_trips else 0
-                                    }
-                                    
-                                    for trip in filtered_trips:
-                                        length = trip['length']
-                                        base = trip['base']
-                                        occurrences = trip.get('occurrences', 1)
-                                        
-                                        # By length
-                                        if length not in stats['by_length']:
-                                            stats['by_length'][length] = 0
-                                        stats['by_length'][length] += occurrences
-                                        
-                                        # By base
-                                        if base not in stats['by_base']:
-                                            stats['by_base'][base] = 0
-                                        stats['by_base'][base] += occurrences
-                                        
-                                        # Commutability
-                                        report_min = parse_time_to_minutes(trip.get('report_time'))
-                                        release_min = parse_time_to_minutes(trip.get('release_time'))
-                                        
-                                        front_ok = report_min is not None and front_threshold is not None and report_min >= front_threshold
-                                        back_ok = release_min is not None and back_threshold is not None and release_min <= back_threshold
-                                        
-                                        if front_ok:
-                                            stats['commutability']['front'] += occurrences
-                                        if back_ok:
-                                            stats['commutability']['back'] += occurrences
-                                        if front_ok and back_ok:
-                                            stats['commutability']['both'] += occurrences
-                                        
-                                        # Weekday analysis
-                                        days = trip.get('days_of_week', [])
-                                        if 'SA' not in days and 'SU' not in days and len(days) > 0:
-                                            stats['weekday_only'] += occurrences
-                                        elif 'SA' in days or 'SU' in days:
-                                            stats['weekend_included'] += occurrences
-                                    
-                                    trip_summary = stats
-                                
-                                # Call Claude API
                                 client = anthropic.Anthropic(api_key=api_key)
-                                
-                                if statistical_mode:
-                                    # Statistical mode prompt
-                                    prompt_content = f"""You are analyzing pilot trip scheduling data. The dataset is large ({len(filtered_trips)} trips), so here are comprehensive statistics calculated from ALL trips:
-
-{trip_summary}
-
-Statistics explanation:
-- total_trips: Total unique trip patterns
-- total_occurrences: Total trips when counting each occurrence
-- by_length: Breakdown by trip length (1-5 days)
-- by_base: Breakdown by airline base
-- commutability: Counts of trips that are front/back/both ends commutable (thresholds: front ≥ {front_end_time}, back ≤ {back_end_time})
-- weekday_only: Trips operating Monday-Friday only (no SA or SU)
-- weekend_included: Trips that include Saturday or Sunday
-- avg_credit: Average credit hours per trip
-- avg_length: Average trip length in days
-
-The user's question is: {user_question}
-
-Please analyze these statistics and provide a clear, concise answer. Focus on the numbers and patterns that directly answer the user's question."""
-                                else:
-                                    # Detailed mode prompt
-                                    prompt_content = f"""You are analyzing pilot trip scheduling data. Here is the current filtered dataset (showing first 500 of {len(filtered_trips)} trips):
-
-{trip_summary}
-
-Each trip includes:
-- days_of_week: Which days of the week this trip operates (e.g., ['MO', 'TU', 'WE', 'TH', 'FR'] means Monday-Friday only, ['SA', 'SU'] means weekends only)
-- occurrences: How many times this trip pattern operates during the bid period
-- report/release: Time strings (HH:MM format)
-- front_end_commutable: True if report_minutes >= front_threshold (630 = 10:30)
-- back_end_commutable: True if release_minutes <= back_threshold (1080 = 18:00)
-- both_ends_commutable: True if BOTH front and back are commutable
-
-CRITICAL FILTERING RULES:
-- "Monday-Friday only" means days_of_week must contain ONLY weekday codes (MO, TU, WE, TH, FR)
-- If days_of_week contains 'SA' or 'SU', the trip is NOT Monday-Friday only
-- Example: ['SA'] = Saturday trip = NOT Monday-Friday
-- Example: ['MO'] = Monday trip = Monday-Friday only ✓
-- Example: ['MO', 'SA'] = Monday and Saturday = NOT Monday-Friday only
-
-Common day patterns:
-- Monday-Friday only: days_of_week contains only ['MO', 'TU', 'WE', 'TH', 'FR'] or subset (no SA or SU)
-- Weekends only: days_of_week contains only ['SA', 'SU']
-- Every day: days_of_week is empty or contains all 7 days
-
-The user's question is: {user_question}
-
-When counting trips, remember to sum the 'occurrences' field to get total trips. Format your response clearly with bullet points or tables where appropriate."""
-                                
                                 message = client.messages.create(
-                                    model="claude-sonnet-4-20250514",
-                                    max_tokens=4000,
-                                    messages=[{
-                                        "role": "user",
-                                        "content": prompt_content
-                                    }]
+                                    model="claude-sonnet-4-20250514", max_tokens=4000,
+                                    messages=[{"role": "user", "content": f"""You are analyzing pilot trip scheduling data. Filtered dataset (first 500 of {len(filtered_trips)} trips):\n\n{trip_summary}\n\ndays_of_week codes: MO=Monday, TU=Tuesday, WE=Wednesday, TH=Thursday, FR=Friday, SA=Saturday, SU=Sunday\nMonday-Friday only = no SA or SU in days_of_week\n\nSum 'occurrences' for totals.\n\nQuestion: {user_question}"""}]
                                 )
-                                
-                                # Display response
                                 st.success("✨ AI Analysis:")
                                 st.markdown(message.content[0].text)
-                                
-                            except ImportError:
-                                st.error("❌ Anthropic library not installed. Run: `pip install anthropic`")
                             except Exception as e:
                                 st.error(f"❌ Error: {str(e)}")
             
-            # Create dataframe for display
+            # Trip table
             if filtered_trips:
-                # Initialize selected trip in session state
                 if 'selected_trip_index' not in st.session_state:
                     st.session_state.selected_trip_index = None
                 
@@ -1304,25 +861,16 @@ When counting trips, remember to sum the 'occurrences' field to get total trips.
                         'Shortest': trip['shortest_leg'],
                         'Credit': trip['total_credit'] if trip['total_credit'] is not None else None,
                         'Pay': trip['total_pay'] if trip['total_pay'] is not None else None,
-                        'SIT': trip.get('sit'),
-                        'EDP': trip.get('edp'),
-                        'HOL': trip.get('hol'),
-                        'CARVE': trip.get('carve'),
+                        'SIT': trip.get('sit'), 'EDP': trip.get('edp'),
+                        'HOL': trip.get('hol'), 'CARVE': trip.get('carve'),
                         'Occurs': trip['occurrences']
                     })
                 
                 df = pd.DataFrame(df_data)
-                
-                # Use data_editor for selection capability with column sorting enabled
                 edited_df = st.data_editor(
                     df,
                     column_config={
-                        'Select': st.column_config.CheckboxColumn(
-                            'Select',
-                            help='Click to view trip details',
-                            default=False,
-                            width='small'
-                        ),
+                        'Select': st.column_config.CheckboxColumn('Select', default=False, width='small'),
                         'Trip #': st.column_config.TextColumn('Trip #', width='medium'),
                         'Base': st.column_config.TextColumn('Base', width='small'),
                         'Length': st.column_config.TextColumn('Length', width='small'),
@@ -1337,33 +885,21 @@ When counting trips, remember to sum the 'occurrences' field to get total trips.
                         'EDP': st.column_config.NumberColumn('EDP', width='small', format="%.2f"),
                         'HOL': st.column_config.NumberColumn('HOL', width='small', format="%.2f"),
                         'CARVE': st.column_config.NumberColumn('CARVE', width='small', format="%.2f"),
-                        'Occurs': st.column_config.NumberColumn('Occurs', width='small', help='Number of times this trip operates')
+                        'Occurs': st.column_config.NumberColumn('Occurs', width='small'),
                     },
-                    disabled=['Trip #', 'Base', 'Length', 'Report', 'Release', 'Legs', 'Longest', 'Shortest', 'Credit', 'Pay', 'SIT', 'EDP', 'HOL', 'CARVE', 'Occurs'],
-                    hide_index=True,
-                    use_container_width=True,
-                    height=600,
-                    key='trip_table'
+                    disabled=['Trip #', 'Base', 'Length', 'Report', 'Release', 'Legs', 'Longest',
+                              'Shortest', 'Credit', 'Pay', 'SIT', 'EDP', 'HOL', 'CARVE', 'Occurs'],
+                    hide_index=True, use_container_width=True, height=600, key='trip_table'
                 )
                 
-                # Check which trips are selected
                 selected_indices = edited_df[edited_df['Select']].index.tolist()
                 
-                # Display details for selected trips
                 if selected_indices:
                     st.markdown("---")
-                    
                     selected_trip_objects = [filtered_trips[idx] for idx in selected_indices]
+                    pdf_settings = (f"Base: {selected_base}  |  Front-End: ≥{front_end_time}  |  "
+                                   f"Back-End: ≤{back_end_time}  |  {fdata.get('display_name', '')}")
                     
-                    # Build settings string for PDF header
-                    pdf_settings = (
-                        f"Base: {selected_base}  |  "
-                        f"Front-End: ≥{front_end_time}  |  "
-                        f"Back-End: ≤{back_end_time}  |  "
-                        f"{fdata.get('display_name', '')}"
-                    )
-                    
-                    # Header row with export buttons
                     hdr_col1, hdr_col2, hdr_col3 = st.columns([3, 1, 1])
                     with hdr_col1:
                         total_sel_occ = sum(t.get('occurrences', 1) for t in selected_trip_objects)
@@ -1377,161 +913,102 @@ When counting trips, remember to sum the 'occurrences' field to get total trips.
                     with hdr_col2:
                         try:
                             pdf_bytes = analysis_engine.generate_selected_trips_pdf(
-                                selected_trip_objects,
-                                display_name=fdata.get('display_name', ''),
+                                selected_trip_objects, display_name=fdata.get('display_name', ''),
                                 settings_text=pdf_settings
                             )
                             st.download_button(
-                                label="📄 Print / Save PDF",
-                                data=pdf_bytes,
+                                label="📄 Print / Save PDF", data=pdf_bytes,
                                 file_name=f"selected_trips_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                                mime="application/pdf",
-                                use_container_width=True,
-                                key='export_selected_pdf'
+                                mime="application/pdf", use_container_width=True, key='export_selected_pdf'
                             )
                         except Exception as e:
                             st.error(f"PDF error: {e}")
                     with hdr_col3:
                         txt_content = analysis_engine.generate_selected_trips_txt(selected_trip_objects)
                         st.download_button(
-                            label="📋 Export Raw TXT",
-                            data=txt_content.encode('utf-8'),
+                            label="📋 Export Raw TXT", data=txt_content.encode('utf-8'),
                             file_name=f"selected_trips_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                            mime="text/plain",
-                            use_container_width=True,
-                            key='export_selected_txt'
+                            mime="text/plain", use_container_width=True, key='export_selected_txt'
                         )
                     
-                    # Trip raw-text expanders below the export buttons
                     for idx in selected_indices:
                         trip = filtered_trips[idx]
-                        trip_num = trip['trip_number']
-                        with st.expander(f"Trip #{trip_num} - Full Details", expanded=True):
+                        with st.expander(f"Trip #{trip['trip_number']} - Full Details", expanded=True):
                             st.code(trip['raw_text'], language=None)
             else:
                 st.info("No trips match the current filters.")
     
     else:
-        # Multiple files - show detailed comparison tables
+        # Multiple files — detailed comparison tables
         st.subheader("📈 Detailed Comparison Analysis")
         
-        # Add grouping mode selector
         grouping_mode = st.radio(
             "Display Mode",
             ["Sequential (by date)", "Year-over-Year (by month)"],
-            horizontal=True,
-            help="Sequential shows all files in chronological order. Year-over-Year groups by month across years."
+            horizontal=True
         )
         
-        # AI Chat Section for Comparison View
         with st.expander("💬 Ask AI About This Comparison", expanded=False):
-            st.markdown("Ask questions comparing the different bid packs!")
-            st.markdown("*Examples: 'Which month has better 3-day trips?', 'How do November and December compare for commutability?'*")
-            
-            # Try to get API key from secrets, then from session state, then from user input
             api_key_comparison = None
             if "ANTHROPIC_API_KEY" in st.secrets:
                 api_key_comparison = st.secrets["ANTHROPIC_API_KEY"]
                 st.success("✅ Using API key from Streamlit secrets")
             else:
-                # API Key input
                 api_key_comparison = st.text_input(
-                    "Anthropic API Key",
-                    type="password",
-                    help="Get your API key at https://console.anthropic.com, or save it in Settings > Secrets as ANTHROPIC_API_KEY",
-                    key="anthropic_api_key_comparison",
-                    value=st.session_state.get('saved_api_key', '')
+                    "Anthropic API Key", type="password",
+                    key="anthropic_api_key_comparison", value=st.session_state.get('saved_api_key', '')
                 )
-                
-                if api_key_comparison and api_key_comparison != st.session_state.get('saved_api_key', ''):
-                    st.session_state.saved_api_key = api_key_comparison
-                    st.info("💡 API key saved for this session. To save permanently, add it to Streamlit Settings > Secrets")
             
-            # Question input
-            user_question_comparison = st.text_area(
-                "Your Question",
-                placeholder="e.g., Which month should I bid for to maximize credit per day?",
-                height=80,
-                key="ai_question_comparison"
-            )
+            user_question_comparison = st.text_area("Your Question",
+                placeholder="e.g., Which month should I bid to maximize credit per day?",
+                height=80, key="ai_question_comparison")
             
             if st.button("Ask AI", type="primary", key="ask_ai_comparison"):
-                if not api_key_comparison:
-                    st.error("Please enter your Anthropic API key first")
-                elif not user_question_comparison:
-                    st.error("Please enter a question")
+                if not api_key_comparison or not user_question_comparison:
+                    st.error("Please enter API key and question.")
                 else:
-                    with st.spinner("Analyzing comparison data..."):
+                    with st.spinner("Analyzing..."):
                         try:
                             import anthropic
-                            
-                            # Prepare comparison data for AI
                             comparison_data = {}
-                            for fname in st.session_state.analysis_results.keys():
-                                fdata = st.session_state.uploaded_files[fname]
-                                result = st.session_state.analysis_results[fname]
-                                
-                                comparison_data[fdata['display_name']] = {
-                                    'total_trips': result['total_trips'],
-                                    'avg_trip_length': result['avg_trip_length'],
-                                    'avg_credit_per_trip': result['avg_credit_per_trip'],
-                                    'avg_credit_per_day': result['avg_credit_per_day'],
-                                    'trip_counts_by_length': result['trip_counts'],
-                                    'avg_credit_by_length': result['avg_credit_by_length'],
-                                    'avg_credit_per_day_by_length': result['avg_credit_per_day_by_length'],
-                                    'single_leg_last_day_pct': result['single_leg_pct'],
-                                    'redeye_pct': result['redeye_pct'],
-                                    'front_end_commutable_pct': result['front_commute_pct'],
-                                    'back_end_commutable_pct': result['back_commute_pct']
+                            for fn in st.session_state.analysis_results:
+                                fd = st.session_state.uploaded_files[fn]
+                                r = st.session_state.analysis_results[fn]
+                                comparison_data[fd['display_name']] = {
+                                    'total_trips': r['total_trips'],
+                                    'total_credit_hours': r.get('total_credit_hours', 0),
+                                    'avg_trip_length': r['avg_trip_length'],
+                                    'avg_credit_per_trip': r['avg_credit_per_trip'],
+                                    'avg_credit_per_day': r['avg_credit_per_day'],
+                                    'trip_counts_by_length': r['trip_counts'],
+                                    'avg_credit_by_length': r['avg_credit_by_length'],
+                                    'redeye_pct': r['redeye_pct'],
+                                    'front_end_commutable_pct': r['front_commute_pct'],
+                                    'back_end_commutable_pct': r['back_commute_pct']
                                 }
-                            
-                            # Call Claude API
                             client = anthropic.Anthropic(api_key=api_key_comparison)
                             message = client.messages.create(
-                                model="claude-sonnet-4-20250514",
-                                max_tokens=2000,
-                                messages=[{
-                                    "role": "user",
-                                    "content": f"""You are analyzing pilot trip scheduling data comparing multiple bid packs. Here is the comparison data:
-
-{comparison_data}
-
-The user's question is: {user_question_comparison}
-
-Please provide a helpful, detailed comparison highlighting key differences and providing actionable recommendations."""
-                                }]
+                                model="claude-sonnet-4-20250514", max_tokens=2000,
+                                messages=[{"role": "user", "content": f"Pilot scheduling comparison data:\n\n{comparison_data}\n\nQuestion: {user_question_comparison}"}]
                             )
-                            
-                            # Display response
                             st.success("✨ AI Comparison Analysis:")
                             st.markdown(message.content[0].text)
-                            
-                        except ImportError:
-                            st.error("❌ Anthropic library not installed. Run: `pip install anthropic`")
                         except Exception as e:
                             st.error(f"❌ Error: {str(e)}")
         
-        # Sort files by date (month/year)
         month_order = {
             'January': 1, 'February': 2, 'March': 3, 'April': 4,
             'May': 5, 'June': 6, 'July': 7, 'August': 8,
             'September': 9, 'October': 10, 'November': 11, 'December': 12
         }
-        
         sorted_files = sorted(
             st.session_state.analysis_results.keys(),
-            key=lambda f: (
-                st.session_state.uploaded_files[f]['year'],
-                month_order[st.session_state.uploaded_files[f]['month']]
-            )
+            key=lambda f: (st.session_state.uploaded_files[f]['year'], month_order[st.session_state.uploaded_files[f]['month']])
         )
-        
         num_files = len(sorted_files)
         show_differences = (num_files == 2)
         
-        # YEAR-OVER-YEAR MODE
         if grouping_mode == "Year-over-Year (by month)":
-            # Group files by month
             files_by_month = {}
             for fname in sorted_files:
                 month = st.session_state.uploaded_files[fname]['month']
@@ -1539,417 +1016,199 @@ Please provide a helpful, detailed comparison highlighting key differences and p
                     files_by_month[month] = []
                 files_by_month[month].append(fname)
             
-            # Only show months with 2+ years
             multi_year_months = {m: fs for m, fs in files_by_month.items() if len(fs) > 1}
             
             if not multi_year_months:
-                st.warning("⚠️ No months with multiple years found.\n\nTo use Year-over-Year mode, upload files for the same month from different years (e.g., January 2024, January 2025, January 2026)")
+                st.warning("⚠️ No months with multiple years found.")
             
-            # Display each month
             for month in ['January', 'February', 'March', 'April', 'May', 'June',
                           'July', 'August', 'September', 'October', 'November', 'December']:
                 if month not in multi_year_months:
                     continue
-                
                 st.markdown(f"## 📅 {month}")
                 month_files = multi_year_months[month]
                 
-                # 1. Trip Length
-                st.markdown("### 1️⃣ Trip Length Distribution")
-                data = []
-                for fname in month_files:
-                    r = st.session_state.analysis_results[fname]
-                    row = {'Year': st.session_state.uploaded_files[fname]['display_name']}
-                    for l in range(1, 6):
-                        cnt = r['trip_counts'][l]
-                        pct = (cnt / r['total_trips'] * 100) if r['total_trips'] > 0 else 0
-                        row[f'{l}-day'] = f"{cnt} ({pct:.2f}%)"
-                    row['Total'] = f"{r['total_trips']} (100%)"
-                    data.append(row)
-                st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
-                
-                # 2. Single Leg
-                st.markdown("### 2️⃣ Trips with Single Leg on Last Day")
-                data = []
-                for fname in month_files:
-                    r = st.session_state.analysis_results[fname]
-                    row = {'Year': st.session_state.uploaded_files[fname]['display_name']}
-                    for l in range(1, 6):
-                        row[f'{l}-day'] = f"{r['single_leg_pct'][l]:.2f}%"
-                    data.append(row)
-                st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
-                
-                # 3. Credit/Trip
-                st.markdown("### 3️⃣ Average Credit per Trip")
-                data = []
-                for fname in month_files:
-                    r = st.session_state.analysis_results[fname]
-                    row = {'Year': st.session_state.uploaded_files[fname]['display_name']}
-                    for l in range(1, 6):
-                        row[f'{l}-day'] = f"{r['avg_credit_by_length'][l]:.2f}"
-                    row['Overall'] = f"{r['avg_credit_per_trip']:.2f}"
-                    data.append(row)
-                st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
-                
-                # 4. Credit/Day
-                st.markdown("### 4️⃣ Average Credit per Day")
-                data = []
-                for fname in month_files:
-                    r = st.session_state.analysis_results[fname]
-                    row = {'Year': st.session_state.uploaded_files[fname]['display_name']}
-                    for l in range(1, 6):
-                        row[f'{l}-day'] = f"{r['avg_credit_per_day_by_length'][l]:.2f}"
-                    row['Overall'] = f"{r['avg_credit_per_day']:.2f}"
-                    data.append(row)
-                st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
-                
-                # 5. Commutability
-                st.markdown("### 5️⃣ Commutability (Both Ends)")
-                data = []
-                for fname in month_files:
-                    r = st.session_state.analysis_results[fname]
-                    row = {'Year': st.session_state.uploaded_files[fname]['display_name']}
-                    for l in range(1, 6):
-                        row[f'{l}-day'] = f"{r['both_commute_pct'][l]:.2f}%"
-                    row['Overall'] = f"{r['both_commute_rate']:.2f}%"
-                    data.append(row)
-                st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
-                
-                # 6. Red-Eye
-                st.markdown("### 6️⃣ Trips Containing Red-Eye Flight")
-                data = []
-                for fname in month_files:
-                    r = st.session_state.analysis_results[fname]
-                    row = {'Year': st.session_state.uploaded_files[fname]['display_name']}
-                    for l in range(1, 6):
-                        row[f'{l}-day'] = f"{r['redeye_pct'][l]:.2f}%"
-                    row['Overall'] = f"{r['redeye_rate']:.2f}%"
-                    # Calculate total red-eyes
-                    total_redeye = sum(r['trip_counts'][i] * r['redeye_pct'][i] / 100 for i in range(1, 6))
-                    row['Total Red-Eyes'] = f"{int(total_redeye)}"
-                    data.append(row)
-                st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
-                
+                for section, key, fmt_fn in [
+                    ("1️⃣ Trip Length Distribution", None, None),
+                    ("2️⃣ Single Leg on Last Day", 'single_leg_pct', lambda r, l: f"{r['single_leg_pct'][l]:.2f}%"),
+                    ("3️⃣ Average Credit per Trip", 'avg_credit_by_length', lambda r, l: f"{r['avg_credit_by_length'][l]:.2f}"),
+                    ("4️⃣ Average Credit per Day", 'avg_credit_per_day_by_length', lambda r, l: f"{r['avg_credit_per_day_by_length'][l]:.2f}"),
+                    ("5️⃣ Commutability (Both Ends)", 'both_commute_pct', lambda r, l: f"{r['both_commute_pct'][l]:.2f}%"),
+                    ("6️⃣ Red-Eye Trips", 'redeye_pct', lambda r, l: f"{r['redeye_pct'][l]:.2f}%"),
+                ]:
+                    st.markdown(f"### {section}")
+                    data = []
+                    for fn in month_files:
+                        r = st.session_state.analysis_results[fn]
+                        row = {'Year': st.session_state.uploaded_files[fn]['display_name']}
+                        if key is None:  # Trip Length
+                            for l in range(1, 6):
+                                cnt = r['trip_counts'][l]
+                                pct = (cnt / r['total_trips'] * 100) if r['total_trips'] > 0 else 0
+                                row[f'{l}-day'] = f"{cnt} ({pct:.2f}%)"
+                            row['Total'] = f"{r['total_trips']} (100%)"
+                        else:
+                            for l in range(1, 6):
+                                row[f'{l}-day'] = fmt_fn(r, l)
+                        data.append(row)
+                    st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
                 st.markdown("---")
         
-        # SEQUENTIAL MODE (original logic)
         else:
+            # Sequential mode
+            def show_table(title, data_fn, diff_fn=None):
+                st.markdown(title)
+                data = []
+                for fname in sorted_files:
+                    r = st.session_state.analysis_results[fname]
+                    dn = st.session_state.uploaded_files[fname]['display_name']
+                    data.append({'File': dn, **data_fn(r)})
+                st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
+                if show_differences and diff_fn:
+                    r1 = st.session_state.analysis_results[sorted_files[0]]
+                    r2 = st.session_state.analysis_results[sorted_files[1]]
+                    st.dataframe(pd.DataFrame([{'Metric': 'Difference', **diff_fn(r1, r2)}]),
+                                use_container_width=True, hide_index=True)
+                st.markdown("---")
             
-            # 1. TRIP LENGTH DISTRIBUTION
+            # 1. Trip Length
             st.markdown("### 1️⃣ Trip Length Distribution")
-            trip_dist_data = []
+            data = []
             for fname in sorted_files:
-                result = st.session_state.analysis_results[fname]
-                display_name = st.session_state.uploaded_files[fname]['display_name']
-                row = {'File': display_name}
-                for length in range(1, 6):
-                    count = result['trip_counts'][length]
-                    pct = (count / result['total_trips'] * 100) if result['total_trips'] > 0 else 0
-                    row[f'{length}-day'] = f"{count} ({pct:.2f}%)"
-                row['Total'] = f"{result['total_trips']} (100.00%)"
-                trip_dist_data.append(row)
-            st.dataframe(pd.DataFrame(trip_dist_data), use_container_width=True, hide_index=True)
-        
-            # Show differences only if exactly 2 files
+                r = st.session_state.analysis_results[fname]
+                row = {'File': st.session_state.uploaded_files[fname]['display_name']}
+                for l in range(1, 6):
+                    cnt = r['trip_counts'][l]
+                    pct = (cnt / r['total_trips'] * 100) if r['total_trips'] > 0 else 0
+                    row[f'{l}-day'] = f"{cnt} ({pct:.2f}%)"
+                row['Total'] = f"{r['total_trips']} (100.00%)"
+                data.append(row)
+            st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
             if show_differences:
-                st.markdown("**Change (Newer - Older):**")
-                diff_data = []
                 r1 = st.session_state.analysis_results[sorted_files[0]]
                 r2 = st.session_state.analysis_results[sorted_files[1]]
-                row = {'Metric': 'Percentage Point Difference'}
-                for length in range(1, 6):
-                    pct1 = (r1['trip_counts'][length] / r1['total_trips'] * 100) if r1['total_trips'] > 0 else 0
-                    pct2 = (r2['trip_counts'][length] / r2['total_trips'] * 100) if r2['total_trips'] > 0 else 0
-                    diff = pct2 - pct1
-                    row[f'{length}-day'] = f"{diff:+.2f} points"
-                diff_data.append(row)
-                st.dataframe(pd.DataFrame(diff_data), use_container_width=True, hide_index=True)
-        
+                diff = {'Metric': 'Pct Point Diff'}
+                for l in range(1, 6):
+                    p1 = r1['trip_counts'][l] / r1['total_trips'] * 100 if r1['total_trips'] > 0 else 0
+                    p2 = r2['trip_counts'][l] / r2['total_trips'] * 100 if r2['total_trips'] > 0 else 0
+                    diff[f'{l}-day'] = f"{p2-p1:+.2f} pts"
+                st.dataframe(pd.DataFrame([diff]), use_container_width=True, hide_index=True)
             st.markdown("---")
-        
-            # 2. SINGLE LEG ON LAST DAY
-            st.markdown("### 2️⃣ Trips with Single Leg on Last Day")
-            single_leg_data = []
-            for fname in sorted_files:
-                result = st.session_state.analysis_results[fname]
-                display_name = st.session_state.uploaded_files[fname]['display_name']
-                row = {'File': display_name}
-                for length in range(1, 6):
-                    total = result['trip_counts'][length]
-                    single_count = int(total * result['single_leg_pct'][length] / 100)
-                    pct = result['single_leg_pct'][length]
-                    row[f'{length}-day'] = f"{single_count} ({pct:.2f}%)"
-                # Overall
-                total_single = sum(result['trip_counts'][i] * result['single_leg_pct'][i] / 100 for i in range(1, 6))
-                overall_pct = (total_single / result['total_trips'] * 100) if result['total_trips'] > 0 else 0
-                overall_count = int(total_single)
-                row['Overall'] = f"{overall_count} ({overall_pct:.2f}%)"
-                single_leg_data.append(row)
-            st.dataframe(pd.DataFrame(single_leg_data), use_container_width=True, hide_index=True)
-        
-            if show_differences:
-                st.markdown("**Change (Newer - Older):**")
-                diff_data = []
-                r1 = st.session_state.analysis_results[sorted_files[0]]
-                r2 = st.session_state.analysis_results[sorted_files[1]]
-                row = {'Metric': 'Percentage Point Difference'}
-                for length in range(1, 6):
-                    diff = r2['single_leg_pct'][length] - r1['single_leg_pct'][length]
-                    row[f'{length}-day'] = f"{diff:+.2f} points"
-                # Overall difference
-                total_single1 = sum(r1['trip_counts'][i] * r1['single_leg_pct'][i] / 100 for i in range(1, 6))
-                overall_pct1 = (total_single1 / r1['total_trips'] * 100) if r1['total_trips'] > 0 else 0
-                total_single2 = sum(r2['trip_counts'][i] * r2['single_leg_pct'][i] / 100 for i in range(1, 6))
-                overall_pct2 = (total_single2 / r2['total_trips'] * 100) if r2['total_trips'] > 0 else 0
-                row['Overall'] = f"{overall_pct2 - overall_pct1:+.2f} points"
-                diff_data.append(row)
-                st.dataframe(pd.DataFrame(diff_data), use_container_width=True, hide_index=True)
-        
-            st.markdown("---")
-        
-            # 3. AVERAGE CREDIT PER TRIP
-            st.markdown("### 3️⃣ Average Credit per Trip (hours)")
-            credit_trip_data = []
-            for fname in sorted_files:
-                result = st.session_state.analysis_results[fname]
-                display_name = st.session_state.uploaded_files[fname]['display_name']
-                row = {'File': display_name}
-                for length in range(1, 6):
-                    row[f'{length}-day'] = f"{result['avg_credit_by_length'][length]:.2f} hrs"
-                row['Overall'] = f"{result['avg_credit_per_trip']:.2f} hrs"
-                credit_trip_data.append(row)
-            st.dataframe(pd.DataFrame(credit_trip_data), use_container_width=True, hide_index=True)
-        
-            if show_differences:
-                st.markdown("**Change (Newer - Older):**")
-                diff_data = []
-                r1 = st.session_state.analysis_results[sorted_files[0]]
-                r2 = st.session_state.analysis_results[sorted_files[1]]
-                row = {'Metric': 'Hour Difference'}
-                for length in range(1, 6):
-                    diff = r2['avg_credit_by_length'][length] - r1['avg_credit_by_length'][length]
-                    row[f'{length}-day'] = f"{diff:+.2f} hrs"
-                overall_diff = r2['avg_credit_per_trip'] - r1['avg_credit_per_trip']
-                row['Overall'] = f"{overall_diff:+.2f} hrs"
-                diff_data.append(row)
-                st.dataframe(pd.DataFrame(diff_data), use_container_width=True, hide_index=True)
-        
-            st.markdown("---")
-        
-            # 4. AVERAGE CREDIT PER DAY
-            st.markdown("### 4️⃣ Average Credit per Day (hours/day)")
-            credit_day_data = []
-            for fname in sorted_files:
-                result = st.session_state.analysis_results[fname]
-                display_name = st.session_state.uploaded_files[fname]['display_name']
-                row = {'File': display_name}
-                for length in range(1, 6):
-                    row[f'{length}-day'] = f"{result['avg_credit_per_day_by_length'][length]:.2f} hrs/day"
-                row['Overall'] = f"{result['avg_credit_per_day']:.2f} hrs/day"
-                credit_day_data.append(row)
-            st.dataframe(pd.DataFrame(credit_day_data), use_container_width=True, hide_index=True)
-        
-            if show_differences:
-                st.markdown("**Change (Newer - Older):**")
-                diff_data = []
-                r1 = st.session_state.analysis_results[sorted_files[0]]
-                r2 = st.session_state.analysis_results[sorted_files[1]]
-                row = {'Metric': 'Hours/Day Difference'}
-                for length in range(1, 6):
-                    diff = r2['avg_credit_per_day_by_length'][length] - r1['avg_credit_per_day_by_length'][length]
-                    row[f'{length}-day'] = f"{diff:+.2f} hrs/day"
-                overall_diff = r2['avg_credit_per_day'] - r1['avg_credit_per_day']
-                row['Overall'] = f"{overall_diff:+.2f} hrs/day"
-                diff_data.append(row)
-                st.dataframe(pd.DataFrame(diff_data), use_container_width=True, hide_index=True)
-        
-            st.markdown("---")
-        
-            # 5. COMMUTABILITY
+            
+            # 2-6: remaining tables
+            for title, row_fn, diff_row_fn in [
+                ("### 2️⃣ Trips with Single Leg on Last Day",
+                 lambda r: {**{f'{l}-day': f"{int(r['trip_counts'][l]*r['single_leg_pct'][l]/100)} ({r['single_leg_pct'][l]:.2f}%)" for l in range(1,6)},
+                             'Overall': f"{int(sum(r['trip_counts'][i]*r['single_leg_pct'][i]/100 for i in range(1,6)))} ({sum(r['trip_counts'][i]*r['single_leg_pct'][i]/100 for i in range(1,6))/r['total_trips']*100 if r['total_trips']>0 else 0:.2f}%)"},
+                 lambda r1,r2: {**{f'{l}-day': f"{r2['single_leg_pct'][l]-r1['single_leg_pct'][l]:+.2f} pts" for l in range(1,6)}}),
+                ("### 3️⃣ Average Credit per Trip (hours)",
+                 lambda r: {**{f'{l}-day': f"{r['avg_credit_by_length'][l]:.2f} hrs" for l in range(1,6)},
+                             'Overall': f"{r['avg_credit_per_trip']:.2f} hrs"},
+                 lambda r1,r2: {**{f'{l}-day': f"{r2['avg_credit_by_length'][l]-r1['avg_credit_by_length'][l]:+.2f}" for l in range(1,6)},
+                                 'Overall': f"{r2['avg_credit_per_trip']-r1['avg_credit_per_trip']:+.2f}"}),
+                ("### 4️⃣ Average Credit per Day (hours/day)",
+                 lambda r: {**{f'{l}-day': f"{r['avg_credit_per_day_by_length'][l]:.2f}" for l in range(1,6)},
+                             'Overall': f"{r['avg_credit_per_day']:.2f}"},
+                 lambda r1,r2: {**{f'{l}-day': f"{r2['avg_credit_per_day_by_length'][l]-r1['avg_credit_per_day_by_length'][l]:+.2f}" for l in range(1,6)},
+                                 'Overall': f"{r2['avg_credit_per_day']-r1['avg_credit_per_day']:+.2f}"}),
+            ]:
+                st.markdown(title)
+                data = []
+                for fname in sorted_files:
+                    r = st.session_state.analysis_results[fname]
+                    data.append({'File': st.session_state.uploaded_files[fname]['display_name'], **row_fn(r)})
+                st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
+                if show_differences:
+                    r1 = st.session_state.analysis_results[sorted_files[0]]
+                    r2 = st.session_state.analysis_results[sorted_files[1]]
+                    st.dataframe(pd.DataFrame([{'Metric': 'Difference', **diff_row_fn(r1, r2)}]),
+                                use_container_width=True, hide_index=True)
+                st.markdown("---")
+            
+            # 5. Commutability
             st.markdown("### 5️⃣ Commutability")
-        
-            st.markdown("**Front-End Commutable (Report ≥ threshold):**")
-            front_data = []
-            for fname in sorted_files:
-                result = st.session_state.analysis_results[fname]
-                display_name = st.session_state.uploaded_files[fname]['display_name']
-                row = {'File': display_name}
-                for length in range(1, 6):
-                    total = result['trip_counts'][length]
-                    commute_count = int(total * result['front_commute_pct'][length] / 100)
-                    pct = result['front_commute_pct'][length]
-                    row[f'{length}-day'] = f"{commute_count} ({pct:.2f}%)"
-                # Overall
-                total_commute = sum(result['trip_counts'][i] * result['front_commute_pct'][i] / 100 for i in range(1, 6))
-                overall_count = int(total_commute)
-                row['Overall'] = f"{overall_count} ({result['front_commute_rate']:.2f}%)"
-                front_data.append(row)
-            st.dataframe(pd.DataFrame(front_data), use_container_width=True, hide_index=True)
-        
-            if show_differences:
-                diff_data = []
-                r1 = st.session_state.analysis_results[sorted_files[0]]
-                r2 = st.session_state.analysis_results[sorted_files[1]]
-                row = {'Metric': 'Difference'}
-                for length in range(1, 6):
-                    diff = r2['front_commute_pct'][length] - r1['front_commute_pct'][length]
-                    row[f'{length}-day'] = f"{diff:+.2f} points"
-                overall_diff = r2['front_commute_rate'] - r1['front_commute_rate']
-                row['Overall'] = f"{overall_diff:+.2f} points"
-                diff_data.append(row)
-                st.dataframe(pd.DataFrame(diff_data), use_container_width=True, hide_index=True)
-        
-            st.markdown("**Back-End Commutable (Release ≤ threshold):**")
-            back_data = []
-            for fname in sorted_files:
-                result = st.session_state.analysis_results[fname]
-                display_name = st.session_state.uploaded_files[fname]['display_name']
-                row = {'File': display_name}
-                for length in range(1, 6):
-                    total = result['trip_counts'][length]
-                    commute_count = int(total * result['back_commute_pct'][length] / 100)
-                    pct = result['back_commute_pct'][length]
-                    row[f'{length}-day'] = f"{commute_count} ({pct:.2f}%)"
-                # Overall
-                total_commute = sum(result['trip_counts'][i] * result['back_commute_pct'][i] / 100 for i in range(1, 6))
-                overall_count = int(total_commute)
-                row['Overall'] = f"{overall_count} ({result['back_commute_rate']:.2f}%)"
-                back_data.append(row)
-            st.dataframe(pd.DataFrame(back_data), use_container_width=True, hide_index=True)
-        
-            if show_differences:
-                diff_data = []
-                r1 = st.session_state.analysis_results[sorted_files[0]]
-                r2 = st.session_state.analysis_results[sorted_files[1]]
-                row = {'Metric': 'Difference'}
-                for length in range(1, 6):
-                    diff = r2['back_commute_pct'][length] - r1['back_commute_pct'][length]
-                    row[f'{length}-day'] = f"{diff:+.2f} points"
-                overall_diff = r2['back_commute_rate'] - r1['back_commute_rate']
-                row['Overall'] = f"{overall_diff:+.2f} points"
-                diff_data.append(row)
-                st.dataframe(pd.DataFrame(diff_data), use_container_width=True, hide_index=True)
-        
-            st.markdown("**Both Ends Commutable:**")
-            both_data = []
-            for fname in sorted_files:
-                result = st.session_state.analysis_results[fname]
-                display_name = st.session_state.uploaded_files[fname]['display_name']
-                row = {'File': display_name}
-                for length in range(1, 6):
-                    total = result['trip_counts'][length]
-                    commute_count = int(total * result['both_commute_pct'][length] / 100)
-                    pct = result['both_commute_pct'][length]
-                    row[f'{length}-day'] = f"{commute_count} ({pct:.2f}%)"
-                # Overall
-                total_commute = sum(result['trip_counts'][i] * result['both_commute_pct'][i] / 100 for i in range(1, 6))
-                overall_count = int(total_commute)
-                row['Overall'] = f"{overall_count} ({result['both_commute_rate']:.2f}%)"
-                both_data.append(row)
-            st.dataframe(pd.DataFrame(both_data), use_container_width=True, hide_index=True)
-        
-            if show_differences:
-                diff_data = []
-                r1 = st.session_state.analysis_results[sorted_files[0]]
-                r2 = st.session_state.analysis_results[sorted_files[1]]
-                row = {'Metric': 'Difference'}
-                for length in range(1, 6):
-                    diff = r2['both_commute_pct'][length] - r1['both_commute_pct'][length]
-                    row[f'{length}-day'] = f"{diff:+.2f} points"
-                overall_diff = r2['both_commute_rate'] - r1['both_commute_rate']
-                row['Overall'] = f"{overall_diff:+.2f} points"
-                diff_data.append(row)
-                st.dataframe(pd.DataFrame(diff_data), use_container_width=True, hide_index=True)
-        
+            for label, pct_key, rate_key in [
+                ("**Front-End:**", 'front_commute_pct', 'front_commute_rate'),
+                ("**Back-End:**", 'back_commute_pct', 'back_commute_rate'),
+                ("**Both Ends:**", 'both_commute_pct', 'both_commute_rate'),
+            ]:
+                st.markdown(label)
+                data = []
+                for fname in sorted_files:
+                    r = st.session_state.analysis_results[fname]
+                    row = {'File': st.session_state.uploaded_files[fname]['display_name']}
+                    for l in range(1, 6):
+                        cnt = int(r['trip_counts'][l] * r[pct_key][l] / 100)
+                        row[f'{l}-day'] = f"{cnt} ({r[pct_key][l]:.2f}%)"
+                    row['Overall'] = f"{int(sum(r['trip_counts'][i]*r[pct_key][i]/100 for i in range(1,6)))} ({r[rate_key]:.2f}%)"
+                    data.append(row)
+                st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
+                if show_differences:
+                    r1 = st.session_state.analysis_results[sorted_files[0]]
+                    r2 = st.session_state.analysis_results[sorted_files[1]]
+                    diff = {'Metric': 'Difference'}
+                    for l in range(1, 6):
+                        diff[f'{l}-day'] = f"{r2[pct_key][l]-r1[pct_key][l]:+.2f} pts"
+                    diff['Overall'] = f"{r2[rate_key]-r1[rate_key]:+.2f} pts"
+                    st.dataframe(pd.DataFrame([diff]), use_container_width=True, hide_index=True)
             st.markdown("---")
-        
-            # 6. RED-EYE TRIPS
+            
+            # 6. Red-Eye
             st.markdown("### 6️⃣ Trips Containing Red-Eye Flight")
-            redeye_data = []
+            data = []
             for fname in sorted_files:
-                result = st.session_state.analysis_results[fname]
-                display_name = st.session_state.uploaded_files[fname]['display_name']
-                row = {'File': display_name}
-                for length in range(1, 6):
-                    total = result['trip_counts'][length]
-                    redeye_count = int(total * result['redeye_pct'][length] / 100)
-                    pct = result['redeye_pct'][length]
-                    row[f'{length}-day'] = f"{redeye_count} ({pct:.2f}%)"
-                # Overall
-                total_redeye = sum(result['trip_counts'][i] * result['redeye_pct'][i] / 100 for i in range(1, 6))
-                overall_count = int(total_redeye)
-                row['Overall'] = f"{overall_count} ({result['redeye_rate']:.2f}%)"
-                row['Total Red-Eyes'] = f"{overall_count}"
-                redeye_data.append(row)
-            st.dataframe(pd.DataFrame(redeye_data), use_container_width=True, hide_index=True)
-        
+                r = st.session_state.analysis_results[fname]
+                row = {'File': st.session_state.uploaded_files[fname]['display_name']}
+                for l in range(1, 6):
+                    cnt = int(r['trip_counts'][l] * r['redeye_pct'][l] / 100)
+                    row[f'{l}-day'] = f"{cnt} ({r['redeye_pct'][l]:.2f}%)"
+                total_re = int(sum(r['trip_counts'][i]*r['redeye_pct'][i]/100 for i in range(1,6)))
+                row['Overall'] = f"{total_re} ({r['redeye_rate']:.2f}%)"
+                data.append(row)
+            st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
             if show_differences:
-                st.markdown("**Change (Newer - Older):**")
-                diff_data = []
                 r1 = st.session_state.analysis_results[sorted_files[0]]
                 r2 = st.session_state.analysis_results[sorted_files[1]]
-                row = {'Metric': 'Percentage Point Difference'}
-                for length in range(1, 6):
-                    diff = r2['redeye_pct'][length] - r1['redeye_pct'][length]
-                    row[f'{length}-day'] = f"{diff:+.2f} points"
-                # Overall difference
-                overall_diff = r2['redeye_rate'] - r1['redeye_rate']
-                row['Overall'] = f"{overall_diff:+.2f} points"
-                # Absolute count difference
-                total_redeye_1 = sum(r1['trip_counts'][i] * r1['redeye_pct'][i] / 100 for i in range(1, 6))
-                total_redeye_2 = sum(r2['trip_counts'][i] * r2['redeye_pct'][i] / 100 for i in range(1, 6))
-                count_diff = int(total_redeye_2) - int(total_redeye_1)
-                row['Total Red-Eyes'] = f"{count_diff:+d}"
-                diff_data.append(row)
-                st.dataframe(pd.DataFrame(diff_data), use_container_width=True, hide_index=True)
+                diff = {'Metric': 'Difference'}
+                for l in range(1, 6):
+                    diff[f'{l}-day'] = f"{r2['redeye_pct'][l]-r1['redeye_pct'][l]:+.2f} pts"
+                diff['Overall'] = f"{r2['redeye_rate']-r1['redeye_rate']:+.2f} pts"
+                st.dataframe(pd.DataFrame([diff]), use_container_width=True, hide_index=True)
     
-        # Export buttons row
+    # Export buttons
     btn_col1, btn_col2 = st.columns(2)
-
     with btn_col1:
         if st.button("📊 Export Summary/Comparison PDF Report", key='pdf_export'):
             with st.spinner("Generating PDF..."):
                 pdf_bytes = analysis_engine.generate_pdf_report(
-                    st.session_state.analysis_results,
-                    st.session_state.uploaded_files,
-                    selected_base,
-                    front_end_time,
-                    back_end_time
+                    st.session_state.analysis_results, st.session_state.uploaded_files,
+                    selected_base, front_end_time, back_end_time
                 )
                 st.download_button(
-                    label="⬇️ Download Summary/Comparison PDF",
-                    data=pdf_bytes,
+                    label="⬇️ Download Summary/Comparison PDF", data=pdf_bytes,
                     file_name=f"trip_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                    mime="application/pdf",
-                    key='pdf_download'
+                    mime="application/pdf", key='pdf_download'
                 )
-
+    
     with btn_col2:
-        # Only available for single-file analysis
         single_file_available = len(st.session_state.uploaded_files) == 1
         if not single_file_available:
             st.info("📋 Comprehensive Base Report available for single-file analysis only.")
         else:
             if st.button("📋 Export Comprehensive Base Report", key='comprehensive_export'):
-                with st.spinner("Generating comprehensive report (this may take a moment)..."):
+                with st.spinner("Generating comprehensive report..."):
                     fname = list(st.session_state.uploaded_files.keys())[0]
                     fdata = st.session_state.uploaded_files[fname]
                     pdf_bytes = analysis_engine.generate_comprehensive_base_report(
-                        fdata['content'],
-                        fdata,
-                        selected_base,
-                        front_end_time,
-                        back_end_time
+                        fdata['content'], fdata, selected_base, front_end_time, back_end_time
                     )
                     st.download_button(
-                        label="⬇️ Download Comprehensive Base Report",
-                        data=pdf_bytes,
+                        label="⬇️ Download Comprehensive Base Report", data=pdf_bytes,
                         file_name=f"base_report_{selected_base.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                        mime="application/pdf",
-                        key='comprehensive_download'
+                        mime="application/pdf", key='comprehensive_download'
                     )
 
 # Footer
 st.markdown("---")
 st.markdown("✈️ Pilot Trip Scheduling Analysis Tool | Upload up to 12 files for comparison")
-st.caption("Version: 66.4 - Top-25 Longest Legs Sorted by Block Time | 2026-02-27")
+st.caption("Version: 66.5 - Fleet in PDF headers, Total Credit metric | 2026-02-28")
