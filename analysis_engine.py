@@ -1004,6 +1004,7 @@ def analyze_file(file_content, base_filter, front_commute_minutes, back_commute_
     }
     
     total_credit = sum(total_credit_by_length.values())
+    result['total_credit_hours'] = total_credit
     result['avg_credit_per_trip'] = total_credit / total_trips if total_trips > 0 else 0
     
     result['avg_credit_per_day_by_length'] = {
@@ -1832,10 +1833,10 @@ def _create_summary_fig(base, result, display_name, front_str, back_str):
     MARGIN_TB = 0.060
 
     # Title block (top)
-    fig.text(0.5, 1.0 - MARGIN_TB, f"{base_label} - Trip Scheduling Analysis",
+    fig.text(0.5, 1.0 - MARGIN_TB, f"{base_label} - Trip Scheduling Analysis  |  {display_name}",
              ha='center', va='top', fontsize=13, fontweight='bold', color=color)
     fig.text(0.5, 1.0 - MARGIN_TB - 0.042,
-             f"{display_name}  |  Front-End >= {front_str}  |  Back-End <= {back_str}",
+             f"Front-End >= {front_str}  |  Back-End <= {back_str}",
              ha='center', va='top', fontsize=8, color='#555555')
 
     # Key metrics bar — spans ONLY the left table column width
@@ -2019,10 +2020,8 @@ def _create_top20_fig(base, legs_data, display_name):
 
     title_top = 1.0 - MARGIN_TB
     fig.text(0.5, title_top,
-             f"{base_label} - Top 25 Longest Legs (Sorted by Block Time)",
+             f"{base_label} - Top 25 Longest Legs (Sorted by Block Time)  |  {display_name}",
              ha='center', va='top', fontsize=12, fontweight='bold', color='#333333')
-    fig.text(0.5, title_top - 0.038, display_name,
-             ha='center', va='top', fontsize=8, color='#777777')
 
     # Summary bar
     BAR_TOP = title_top - 0.075
