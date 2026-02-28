@@ -1205,6 +1205,21 @@ def generate_pdf_report(analysis_results, uploaded_files, base_filter, front_tim
         # Use KeepTogether to prevent table from splitting across pages
         story.append(KeepTogether([title_para, t, Spacer(1, 0.05*inch)]))
     
+    # 0. Total Trips and Total Credit Summary
+    data = [['File', 'Total Trips', 'Total Credit (hrs)', 'Avg Credit/Trip', 'Avg Credit/Day']]
+    for fname in sorted_files:
+        result = analysis_results[fname]
+        display_name = uploaded_files[fname]['display_name']
+        row = [
+            display_name,
+            f"{result['total_trips']:,}",
+            f"{result.get('total_credit_hours', 0):,.1f}",
+            f"{result['avg_credit_per_trip']:.2f}",
+            f"{result['avg_credit_per_day']:.2f}",
+        ]
+        data.append(row)
+    create_table(data, "0. Total Trips & Credit Summary")
+
     # 1. Trip Length Distribution
     data = [['File', '1-day', '2-day', '3-day', '4-day', '5-day', 'Total']]
     for fname in sorted_files:
