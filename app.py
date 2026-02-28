@@ -60,13 +60,144 @@ if 'dark_mode' not in st.session_state:
 if st.session_state.dark_mode:
     st.markdown("""
     <style>
-    .stApp { background-color: #0e1117 !important; color: #fafafa !important; }
-    section[data-testid="stSidebar"] { background-color: #1a1f2e !important; }
-    .stDataFrame, .stTable { background-color: #1a1f2e !important; color: #fafafa !important; }
-    div[data-testid="metric-container"] { background-color: #1e2433 !important; border-radius: 8px; padding: 10px; }
-    .stTabs [data-baseweb="tab-list"] { background-color: #1a1f2e !important; }
-    .stExpander { background-color: #1a1f2e !important; }
-    input, textarea { background-color: #1e2433 !important; color: #fafafa !important; }
+    /* ── Main background ── */
+    .stApp, .stApp > header, [data-testid="stAppViewContainer"] {
+        background-color: #0e1117 !important;
+        color: #e0e0e0 !important;
+    }
+
+    /* ── Sidebar ── */
+    [data-testid="stSidebar"], [data-testid="stSidebar"] > div {
+        background-color: #161b27 !important;
+        color: #e0e0e0 !important;
+    }
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] .stMarkdown {
+        color: #c0c8d8 !important;
+    }
+
+    /* ── Selectboxes / dropdowns ── */
+    [data-testid="stSelectbox"] > div > div,
+    [data-baseweb="select"] > div {
+        background-color: #1e2433 !important;
+        border-color: #3a4560 !important;
+        color: #e0e0e0 !important;
+    }
+    [data-baseweb="select"] span,
+    [data-baseweb="select"] div {
+        color: #e0e0e0 !important;
+        background-color: transparent !important;
+    }
+    /* Dropdown list popup */
+    [data-baseweb="popover"] ul,
+    [data-baseweb="menu"] {
+        background-color: #1e2433 !important;
+        border-color: #3a4560 !important;
+    }
+    [data-baseweb="menu"] li {
+        background-color: #1e2433 !important;
+        color: #e0e0e0 !important;
+    }
+    [data-baseweb="menu"] li:hover {
+        background-color: #2a3550 !important;
+    }
+
+    /* ── Text inputs & textareas ── */
+    [data-baseweb="input"] input,
+    [data-baseweb="textarea"] textarea,
+    input[type="text"], input[type="password"], textarea {
+        background-color: #1e2433 !important;
+        color: #e0e0e0 !important;
+        border-color: #3a4560 !important;
+    }
+    [data-baseweb="input"], [data-baseweb="textarea"] {
+        background-color: #1e2433 !important;
+        border-color: #3a4560 !important;
+    }
+
+    /* ── Number input ── */
+    [data-testid="stNumberInput"] input {
+        background-color: #1e2433 !important;
+        color: #e0e0e0 !important;
+        border-color: #3a4560 !important;
+    }
+
+    /* ── Metric cards ── */
+    [data-testid="metric-container"] {
+        background-color: #1a2035 !important;
+        border-radius: 8px !important;
+        padding: 12px !important;
+    }
+    [data-testid="metric-container"] label,
+    [data-testid="metric-container"] [data-testid="stMetricLabel"] p {
+        color: #8899bb !important;
+    }
+    [data-testid="metric-container"] [data-testid="stMetricValue"] {
+        color: #e8eeff !important;
+    }
+
+    /* ── Expanders ── */
+    [data-testid="stExpander"] {
+        background-color: #161b27 !important;
+        border-color: #2a3550 !important;
+    }
+    [data-testid="stExpander"] summary {
+        color: #c0c8d8 !important;
+    }
+
+    /* ── Tabs ── */
+    [data-baseweb="tab-list"] {
+        background-color: #161b27 !important;
+    }
+    [data-baseweb="tab"] {
+        color: #8899bb !important;
+    }
+    [aria-selected="true"][data-baseweb="tab"] {
+        color: #4da6ff !important;
+        border-bottom-color: #4da6ff !important;
+    }
+
+    /* ── DataFrames / tables ── */
+    [data-testid="stDataFrame"] iframe {
+        filter: invert(0.88) hue-rotate(180deg);
+    }
+
+    /* ── General text ── */
+    p, h1, h2, h3, h4, label, .stMarkdown {
+        color: #e0e0e0 !important;
+    }
+
+    /* ── Checkboxes ── */
+    [data-baseweb="checkbox"] span {
+        border-color: #4da6ff !important;
+        background-color: #1e2433 !important;
+    }
+
+    /* ── Alerts / info boxes ── */
+    [data-testid="stAlert"] {
+        background-color: #1a2035 !important;
+        color: #e0e0e0 !important;
+    }
+
+    /* ── Forms ── */
+    [data-testid="stForm"] {
+        background-color: #161b27 !important;
+        border-color: #2a3550 !important;
+    }
+
+    /* ── Radio buttons ── */
+    [data-testid="stRadio"] label { color: #c0c8d8 !important; }
+
+    /* ── Code blocks ── */
+    [data-testid="stCode"], code, pre {
+        background-color: #0d1117 !important;
+        color: #79c0ff !important;
+    }
+
+    /* ── Divider ── */
+    hr { border-color: #2a3550 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1272,4 +1403,4 @@ if st.session_state.analysis_results:
 # Footer
 st.markdown("---")
 st.markdown("✈️ Pilot Trip Scheduling Analysis Tool | Upload up to 12 files for comparison")
-st.caption("Version: 66.6 - Dark mode, smart filenames, Total Credit/Trips comparison | 2026-02-28")
+st.caption("Version: 66.7 - Improved dark mode CSS | 2026-02-28")
