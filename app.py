@@ -53,6 +53,38 @@ def check_password():
 if not check_password():
     st.stop()
 
+# ── Dark / Light mode CSS injection ──────────────────────────────────────────
+if 'dark_mode' not in st.session_state:
+    st.session_state.dark_mode = False
+
+if st.session_state.dark_mode:
+    st.markdown("""
+    <style>
+    .stApp { background-color: #0e1117 !important; color: #fafafa !important; }
+    section[data-testid="stSidebar"] { background-color: #1a1f2e !important; }
+    .stDataFrame, .stTable { background-color: #1a1f2e !important; color: #fafafa !important; }
+    div[data-testid="metric-container"] { background-color: #1e2433 !important; border-radius: 8px; padding: 10px; }
+    .stTabs [data-baseweb="tab-list"] { background-color: #1a1f2e !important; }
+    .stExpander { background-color: #1a1f2e !important; }
+    input, textarea { background-color: #1e2433 !important; color: #fafafa !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# ── Filename helper ───────────────────────────────────────────────────────────
+def build_export_filename(prefix, fdata_list, ext="pdf"):
+    """Build export filename: Prefix_Month_Year_Fleet"""
+    if len(fdata_list) == 1:
+        fd = fdata_list[0]
+        month = fd.get('month', 'Unknown')
+        year = fd.get('year', '')
+        fleet = fd.get('fleet', '')
+        parts = [prefix, month, str(year)]
+        if fleet:
+            parts.append(fleet.replace(' ', '_'))
+        return '_'.join(parts) + f'.{ext}'
+    else:
+        return f"{prefix}_MultiFile_{datetime.now().strftime('%Y%m%d')}.{ext}"
+
 # Initialize session state
 if 'uploaded_files' not in st.session_state:
     st.session_state.uploaded_files = {}
@@ -67,7 +99,13 @@ def get_file_hash(content):
 # Sidebar
 st.sidebar.title("✈️ Trip Analysis Settings")
 
-st.sidebar.subheader("Commutability Settings")
+# Dark / Light mode toggle
+_mode_label = "☀️ Switch to Light Mode" if st.session_state.dark_mode else "🌙 Switch to Dark Mode"
+if st.sidebar.button(_mode_label, key='dark_mode_toggle'):
+    st.session_state.dark_mode = not st.session_state.dark_mode
+    st.rerun()
+st.sidebar.markdown("---")
+
 time_options = [f"{h:02d}:{m:02d}" for h in range(24) for m in [0, 30]]
 time_to_minutes = {t: int(t[:2])*60 + int(t[3:]) for t in time_options}
 
@@ -942,6 +980,26 @@ if st.session_state.analysis_results:
         # Multiple files — detailed comparison tables
         st.subheader("📈 Detailed Comparison Analysis")
         
+        # ── Key metrics comparison row ────────────────────────────────────────
+        month_order_sort = {
+            'January': 1, 'February': 2, 'March': 3, 'April': 4,
+            'May': 5, 'June': 6, 'July': 7, 'August': 8,
+            'September': 9, 'October': 10, 'November': 11, 'December': 12
+        }
+        sorted_files_metrics = sorted(
+            st.session_state.analysis_results.keys(),
+            key=lambda f: (st.session_state.uploaded_files[f]['year'], month_order_sort[st.session_state.uploaded_files[f]['month']])
+        )
+        metric_cols = st.columns(len(sorted_files_metrics))
+        for i, fn in enumerate(sorted_files_metrics):
+            r = st.session_state.analysis_results[fn]
+            fd = st.session_state.uploaded_files[fn]
+            with metric_cols[i]:
+                st.markdown(f"**{fd['display_name']}**")
+                st.metric("Total Trips", f"{r['total_trips']:,}")
+                st.metric("Total Credit (hrs)", f"{r.get('total_credit_hours', 0):,.1f}")
+        st.markdown("---")
+        
         grouping_mode = st.radio(
             "Display Mode",
             ["Sequential (by date)", "Year-over-Year (by month)"],
@@ -1184,9 +1242,11 @@ if st.session_state.analysis_results:
                     st.session_state.analysis_results, st.session_state.uploaded_files,
                     selected_base, front_end_time, back_end_time
                 )
+                all_fdata = list(st.session_state.uploaded_files.values())
+                summary_filename = build_export_filename("Summary", all_fdata)
                 st.download_button(
                     label="⬇️ Download Summary/Comparison PDF", data=pdf_bytes,
-                    file_name=f"trip_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                    file_name=summary_filename,
                     mime="application/pdf", key='pdf_download'
                 )
     
@@ -1202,13 +1262,14 @@ if st.session_state.analysis_results:
                     pdf_bytes = analysis_engine.generate_comprehensive_base_report(
                         fdata['content'], fdata, selected_base, front_end_time, back_end_time
                     )
+                    comp_filename = build_export_filename("Comprehensive", [fdata])
                     st.download_button(
                         label="⬇️ Download Comprehensive Base Report", data=pdf_bytes,
-                        file_name=f"base_report_{selected_base.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                        file_name=comp_filename,
                         mime="application/pdf", key='comprehensive_download'
                     )
 
 # Footer
 st.markdown("---")
 st.markdown("✈️ Pilot Trip Scheduling Analysis Tool | Upload up to 12 files for comparison")
-st.caption("Version: 66.5 - Fleet in PDF headers, Total Credit metric | 2026-02-28")
+st.caption("Version: 66.6 - Dark mode, smart filenames, Total Credit/Trips comparison | 2026-02-28")
