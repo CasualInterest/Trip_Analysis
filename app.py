@@ -792,7 +792,8 @@ if st.session_state.analysis_results:
                                      'filter_release_start', 'filter_release_end', 'filter_search',
                                      'filter_num_legs', 'filter_credit', 'filter_one_leg_home',
                                      'filter_has_sit', 'filter_has_edp', 'filter_has_hol',
-                                     'filter_has_carve', 'filter_has_redeye', 'filter_last_leg_dh']
+                                     'filter_has_carve', 'filter_has_redeye', 'filter_last_leg_dh',
+                                     'filter_mid_rotation_redeye', 'trip_select_all']
                     for key in keys_to_delete:
                         if key in st.session_state:
                             del st.session_state[key]
@@ -813,10 +814,15 @@ if st.session_state.analysis_results:
             with checkbox_col6:
                 has_redeye = st.checkbox("Has Red-Eye", key='filter_has_redeye')
             
-            dh_col1 = st.columns(6)[0]
+            dh_col1, dh_col2 = st.columns(6)[:2]
             with dh_col1:
                 last_leg_dh_filter = st.checkbox("Last Leg DH", key='filter_last_leg_dh',
                                                   help="Show only trips where the final flight leg is a Deadhead (DH)")
+            with dh_col2:
+                mid_rotation_redeye_filter = st.checkbox(
+                    "First/Mid-Rotation Red-Eye", key='filter_mid_rotation_redeye',
+                    help="Show only trips with a red-eye flight NOT on the last day — the pilot must continue working the next day"
+                )
             
             # Apply filters
             filtered_trips = trips.copy()
@@ -877,6 +883,8 @@ if st.session_state.analysis_results:
                 filtered_trips = [t for t in filtered_trips if t.get('has_redeye') == True]
             if last_leg_dh_filter:
                 filtered_trips = [t for t in filtered_trips if t.get('last_leg_dh') == True]
+            if mid_rotation_redeye_filter:
+                filtered_trips = [t for t in filtered_trips if t.get('mid_rotation_redeye') == True]
             
             total_occurrences = sum(trip.get('occurrences', 1) for trip in filtered_trips)
             st.markdown(f"**Showing {total_occurrences} trips** *({len(filtered_trips)} unique patterns)*")
@@ -1016,10 +1024,24 @@ if st.session_state.analysis_results:
                 if 'selected_trip_index' not in st.session_state:
                     st.session_state.selected_trip_index = None
                 
+                # ── Select All / Deselect All ─────────────────────────────
+                if 'trip_select_all' not in st.session_state:
+                    st.session_state.trip_select_all = False
+                
+                sel_col1, sel_col2, sel_col3 = st.columns([1, 1, 8])
+                with sel_col1:
+                    if st.button("☑️ Select All", key='btn_select_all'):
+                        st.session_state.trip_select_all = True
+                        st.rerun()
+                with sel_col2:
+                    if st.button("☐ Deselect All", key='btn_deselect_all'):
+                        st.session_state.trip_select_all = False
+                        st.rerun()
+                
                 df_data = []
                 for i, trip in enumerate(filtered_trips):
                     df_data.append({
-                        'Select': False,
+                        'Select': st.session_state.trip_select_all,
                         'Trip #': trip['trip_number'] or 'N/A',
                         'Base': trip['base'],
                         'Length': f"{trip['length']}-day",
@@ -1403,4 +1425,4 @@ if st.session_state.analysis_results:
 # Footer
 st.markdown("---")
 st.markdown("✈️ Pilot Trip Scheduling Analysis Tool | Upload up to 12 files for comparison")
-st.caption("Version: 66.7 - Improved dark mode CSS | 2026-02-28")
+st.caption("Version: 66.9 - Select All / Deselect All for trip table | 2026-03-01")
