@@ -679,6 +679,9 @@ def extract_detailed_trip_info(trip_lines):
     # Check if trip has red-eye
     has_redeye = has_redeye_flight(flight_legs)
     
+    # Check if trip has a red-eye on any day EXCEPT the last day
+    mid_rotation_redeye = has_mid_rotation_redeye(trip_lines)
+    
     # Check if last leg is a deadhead
     last_leg_dh = get_last_leg_is_dh(trip_lines)
     
@@ -708,6 +711,7 @@ def extract_detailed_trip_info(trip_lines):
         'credit_minutes': credit_components['credit'],  # CR in minutes for filtering
         'block_hours': credit_components['block'],  # BL in hours for reference
         'has_redeye': has_redeye,  # For filtering
+        'mid_rotation_redeye': mid_rotation_redeye,  # Red-eye NOT on last day
         'last_leg_dh': last_leg_dh,  # For filtering
         'total_pay': pay_data['total_pay'],
         'sit': pay_data['sit'],
@@ -892,7 +896,95 @@ def has_redeye_flight(flight_legs):
     
     return False
 
-def calculate_report_time(first_dep_time):
+def has_mid_rotation_redeye(trip_lines):
+    """
+    Check if ANY flight leg that is NOT on the last day of the trip is a red-eye.
+    
+    "First/Mid-Rotation Red-Eye" = overnight flight intruding WOCL (02:00-05:59)
+    that occurs on Day A, B, C, or D (never the last day letter).
+    This identifies trips where the pilot operates a red-eye and then must
+    continue working the next day rather than going home.
+    """
+    day_to_length = {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5}
+    
+    # First pass: determine last day letter
+    last_day_letter = None
+    for line in trip_lines:
+        if len(line) < 10:
+            continue
+        day_col = line[1:4].strip()
+        if day_col in ['A', 'B', 'C', 'D', 'E']:
+            last_day_letter = day_col
+    
+    if not last_day_letter:
+        return False
+    
+    # Second pass: collect legs by day, check non-last-day legs for red-eye
+    current_day_letter = None
+    for line in trip_lines:
+        if len(line) < 10:
+            continue
+        
+        day_col = line[1:4].strip()
+        if day_col in ['A', 'B', 'C', 'D', 'E']:
+            current_day_letter = day_col
+        
+        if current_day_letter is None or current_day_letter == last_day_letter:
+            continue  # Skip last-day legs entirely
+        
+        if len(line) > 30:
+            parts = line.split()
+            i = 0
+            while i < len(parts) - 3:
+                part1 = parts[i]
+                part2 = parts[i+1].rstrip('*')
+                part3 = parts[i+2]
+                part4_raw = parts[i+3]
+                part4 = part4_raw.rstrip('*')
+                
+                if (len(part1) == 3 and part1.isalpha() and
+                    len(part2) == 4 and part2.isdigit() and
+                    len(part3) == 3 and part3.isalpha() and
+                    len(part4) == 4 and part4.isdigit()):
+                    
+                    # Check this leg for red-eye
+                    dep_time = part2
+                    arr_time = part4_raw  # keep * for overnight marker
+                    
+                    try:
+                        dep_hour = int(dep_time[:2])
+                        dep_min  = int(dep_time[2:4])
+                        arr_clean = arr_time.rstrip('*')
+                        arr_hour = int(arr_clean[:2])
+                        arr_min  = int(arr_clean[2:4])
+                        
+                        dep_minutes = dep_hour * 60 + dep_min
+                        arr_minutes = arr_hour * 60 + arr_min
+                        
+                        wocl_start = 2 * 60   # 02:00
+                        wocl_end   = 5 * 60 + 59  # 05:59
+                        
+                        is_overnight = '*' in arr_time
+                        if not is_overnight:
+                            if dep_minutes >= 18 * 60 and arr_minutes < 12 * 60:
+                                is_overnight = True
+                        
+                        if is_overnight:
+                            if wocl_start <= arr_minutes <= wocl_end:
+                                return True
+                            if dep_minutes >= 20 * 60 and wocl_start <= arr_minutes <= 8 * 60:
+                                return True
+                    except (ValueError, IndexError):
+                        pass
+                    
+                    i += 4
+                else:
+                    i += 1
+    
+    return False
+
+
+
     """Calculate report time = first departure - 60 minutes"""
     try:
         hour = int(first_dep_time[:2])
