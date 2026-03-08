@@ -984,7 +984,7 @@ def has_mid_rotation_redeye(trip_lines):
     return False
 
 
-
+def calculate_report_time(first_dep_time):
     """Calculate report time = first departure - 60 minutes"""
     try:
         hour = int(first_dep_time[:2])
