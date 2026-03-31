@@ -1006,6 +1006,7 @@ def analyze_file(file_content, base_filter, front_commute_minutes, back_commute_
     }
     
     total_credit = sum(total_credit_by_length.values())
+    result['total_credit_hours'] = total_credit
     result['avg_credit_per_trip'] = total_credit / total_trips if total_trips > 0 else 0
     
     result['avg_credit_per_day_by_length'] = {
